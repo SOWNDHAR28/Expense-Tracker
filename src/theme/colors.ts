@@ -1,0 +1,66 @@
+export const colors = {
+  primary: "#6C5CE7",
+  primaryDark: "#5A49C9",
+  softPurple: "#F0EBFF",
+  purpleTint: "#F0EBFF",
+  
+  income: "#27AE60",
+  softIncome: "#EAF8EF",
+  
+  expense: "#E74C3C",
+  softExpense: "#FDECEC",
+  
+  success: "#27AE60",
+  warning: "#F39C12",
+  danger: "#E74C3C",
+  blue: "#3498DB",
+  teal: "#1ABC9C",
+  
+  softGreen: "#EAF8EF",
+  softRed: "#FDECEC",
+  softBlue: "#EAF3FF",
+  softTeal: "#E8FAF7",
+  softOrange: "#FFF4E5",
+  
+  background: "#F8F9FD",
+  card: "#FFFFFF",
+  surface: "#F8F9FA",
+  text: "#2D3436",
+  muted: "#7F8C8D",
+  border: "#EFF2F7",
+  
+  // Category specific colors matching reference image
+  food: "#F39C12",
+  transport: "#3498DB",
+  shopping: "#E74C3C",
+  bills: "#6C5CE7",
+  entertainment: "#9B59B6",
+  health: "#1ABC9C",
+  education: "#2980B9",
+  travel: "#00CEC9",
+  salary: "#27AE60",
+  freelance: "#3498DB",
+  business: "#6C5CE7",
+  bonus: "#E74C3C",
+  interest: "#F39C12",
+  other: "#95A5A6",
+};
+
+export const darkColors = {
+  ...colors,
+  background: "#121214",
+  card: "#1E1E24",
+  surface: "#262630",
+  text: "#F5F6FA",
+  muted: "#A0AEC0",
+  border: "#2D2D3A",
+  softPurple: "#2D2354",
+  purpleTint: "#2D2354",
+  softIncome: "#143322",
+  softExpense: "#38181B",
+  softGreen: "#143322",
+  softRed: "#38181B",
+  softBlue: "#18283B",
+  softTeal: "#143030",
+  softOrange: "#3B2E18",
+};
