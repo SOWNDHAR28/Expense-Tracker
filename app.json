@@ -11,6 +11,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -20,7 +21,7 @@
     "android": {
       "package": "com.expensetracker.app",
       "adaptiveIcon": {
-        "foregroundImage": "./Expense_tracker_v1_preview.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       }
     },

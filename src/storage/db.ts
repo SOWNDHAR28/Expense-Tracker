@@ -53,10 +53,154 @@ export async function initializeDatabase(): Promise<void> {
       );
     `);
 
-    // 4. Migrate data from AsyncStorage if applicable
+    // 4. Seeding of July & August 2026 disabled to keep a clean zero starting point
+    // seedTestData();
+
+    // 5. Migrate data from AsyncStorage if applicable
     await migrateFromAsyncStorage();
   } catch (error) {
     console.error("Database initialization failed:", error);
+  }
+}
+
+function seedTestData() {
+  try {
+    const existing = db.getFirstSync<any>("SELECT COUNT(*) as count FROM transactions;");
+    if (existing && existing.count > 0) return;
+
+    const testSeedTransactions = [
+      // July 2026
+      {
+        id: "tx_july_1",
+        type: "income",
+        amount: 50000,
+        category: "Salary",
+        note: "July Monthly Salary",
+        date: "2026-07-05T09:00:00.000Z",
+        paymentMethod: "Bank Transfer",
+        createdAt: "2026-07-05T09:00:00.000Z",
+        updatedAt: "2026-07-05T09:00:00.000Z",
+      },
+      {
+        id: "tx_july_2",
+        type: "expense",
+        amount: 15000,
+        category: "Rent",
+        note: "July Apartment Rent",
+        date: "2026-07-06T10:30:00.000Z",
+        paymentMethod: "UPI / QR",
+        createdAt: "2026-07-06T10:30:00.000Z",
+        updatedAt: "2026-07-06T10:30:00.000Z",
+      },
+      {
+        id: "tx_july_3",
+        type: "expense",
+        amount: 4500,
+        category: "Food",
+        note: "July Groceries",
+        date: "2026-07-12T18:00:00.000Z",
+        paymentMethod: "Credit Card",
+        createdAt: "2026-07-12T18:00:00.000Z",
+        updatedAt: "2026-07-12T18:00:00.000Z",
+      },
+      {
+        id: "tx_july_4",
+        type: "income",
+        amount: 15000,
+        category: "Freelance",
+        note: "Website Project Payout",
+        date: "2026-07-18T15:00:00.000Z",
+        paymentMethod: "Bank Transfer",
+        createdAt: "2026-07-18T15:00:00.000Z",
+        updatedAt: "2026-07-18T15:00:00.000Z",
+      },
+      {
+        id: "tx_july_5",
+        type: "expense",
+        amount: 2200,
+        category: "Bills",
+        note: "July Electricity Bill",
+        date: "2026-07-20T11:00:00.000Z",
+        paymentMethod: "UPI / QR",
+        createdAt: "2026-07-20T11:00:00.000Z",
+        updatedAt: "2026-07-20T11:00:00.000Z",
+      },
+      // August 2026
+      {
+        id: "tx_aug_1",
+        type: "income",
+        amount: 50000,
+        category: "Salary",
+        note: "August Monthly Salary",
+        date: "2026-08-01T09:00:00.000Z",
+        paymentMethod: "Bank Transfer",
+        createdAt: "2026-08-01T09:00:00.000Z",
+        updatedAt: "2026-08-01T09:00:00.000Z",
+      },
+      {
+        id: "tx_aug_2",
+        type: "expense",
+        amount: 3850,
+        category: "Food",
+        note: "DMart Grocery Superstore",
+        date: "2026-08-03T17:30:00.000Z",
+        paymentMethod: "UPI / QR",
+        createdAt: "2026-08-03T17:30:00.000Z",
+        updatedAt: "2026-08-03T17:30:00.000Z",
+      },
+      {
+        id: "tx_aug_3",
+        type: "expense",
+        amount: 2450,
+        category: "Transport",
+        note: "Car Fuel Fill",
+        date: "2026-08-05T11:30:00.000Z",
+        paymentMethod: "Credit Card",
+        createdAt: "2026-08-05T11:30:00.000Z",
+        updatedAt: "2026-08-05T11:30:00.000Z",
+      },
+      {
+        id: "tx_aug_4",
+        type: "income",
+        amount: 12000,
+        category: "Freelance",
+        note: "Logo & UI Design",
+        date: "2026-08-08T14:00:00.000Z",
+        paymentMethod: "UPI / QR",
+        createdAt: "2026-08-08T14:00:00.000Z",
+        updatedAt: "2026-08-08T14:00:00.000Z",
+      },
+      {
+        id: "tx_aug_5",
+        type: "expense",
+        amount: 4200,
+        category: "Shopping",
+        note: "New clothes & shoes",
+        date: "2026-08-09T19:00:00.000Z",
+        paymentMethod: "Credit Card",
+        createdAt: "2026-08-09T19:00:00.000Z",
+        updatedAt: "2026-08-09T19:00:00.000Z",
+      },
+    ];
+
+    for (const t of testSeedTransactions) {
+      db.runSync(
+        `INSERT OR IGNORE INTO transactions 
+        (id, type, amount, category, note, date, payment_method, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        t.id,
+        t.type,
+        t.amount,
+        t.category,
+        t.note,
+        t.date,
+        t.paymentMethod,
+        t.createdAt,
+        t.updatedAt
+      );
+    }
+  } catch (err) {
+    console.error("Failed to seed test data:", err);
   }
 }
 
@@ -238,5 +382,18 @@ export const dbService = {
 
   clearAllTransactions(): void {
     db.runSync("DELETE FROM transactions;");
+  },
+
+  clearAllData(): void {
+    try {
+      db.runSync("DELETE FROM transactions;");
+      db.runSync("DELETE FROM custom_categories;");
+      db.runSync("DELETE FROM users;");
+      AsyncStorage.removeItem("sqlite_migration_complete_v2");
+      AsyncStorage.removeItem("et_auth_v1");
+      AsyncStorage.removeItem("et_transactions_v1");
+    } catch (error) {
+      console.error("Failed to clear all database data:", error);
+    }
   },
 };

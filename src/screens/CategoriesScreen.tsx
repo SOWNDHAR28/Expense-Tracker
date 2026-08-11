@@ -8,7 +8,6 @@ import {
   Modal,
   TextInput,
   TouchableWithoutFeedback,
-  Alert,
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTransactions } from "../context/TransactionContext";
 import { useTheme } from "../context/ThemeContext";
+import CustomAlertModal from "../components/CustomAlertModal";
 
 const PALETTE_COLORS = [
   "#E74C3C", // Red
@@ -66,6 +66,49 @@ export default function CategoriesScreen() {
   const [newCatColor, setNewCatColor] = useState(PALETTE_COLORS[0]);
   const [newCatIcon, setNewCatIcon] = useState(PALETTE_ICONS[0]);
 
+  // Custom Alert Modal configuration
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon: string;
+    iconColor?: string;
+    iconBg?: string;
+    showCancel: boolean;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    icon: "alert-circle-outline",
+    showCancel: false,
+    onConfirm: () => {},
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    icon = "alert-circle-outline",
+    showCancel = false,
+    onConfirm = () => {},
+    iconColor?: string,
+    iconBg?: string
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      icon,
+      showCancel,
+      onConfirm: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        onConfirm();
+      },
+      iconColor,
+      iconBg,
+    });
+  };
+
   const targetCategories = activeTab === "expense" ? expenseCategories : incomeCategories;
   const targetTotal = activeTab === "expense" ? expenseTotal : incomeTotal;
 
@@ -89,7 +132,15 @@ export default function CategoriesScreen() {
   const handleCreateCategory = async () => {
     const cleanName = newCatName.trim();
     if (!cleanName) {
-      Alert.alert("Required", "Please enter a category name.");
+      showAlert(
+        "Required",
+        "Please enter a category name.",
+        "alert-circle-outline",
+        false,
+        () => {},
+        themeColors.expense,
+        themeColors.softExpense
+      );
       return;
     }
 
@@ -98,7 +149,15 @@ export default function CategoriesScreen() {
       (c) => c.label.toLowerCase() === cleanName.toLowerCase()
     );
     if (duplicate) {
-      Alert.alert("Duplicate", "A category with this name already exists.");
+      showAlert(
+        "Duplicate",
+        "A category with this name already exists.",
+        "alert-circle-outline",
+        false,
+        () => {},
+        themeColors.expense,
+        themeColors.softExpense
+      );
       return;
     }
 
@@ -112,7 +171,15 @@ export default function CategoriesScreen() {
     };
 
     await addCustomCategory(newCat);
-    Alert.alert("Success", `Category "${cleanName}" created successfully!`);
+    showAlert(
+      "Success",
+      `Category "${cleanName}" created successfully!`,
+      "checkmark-circle-outline",
+      false,
+      () => {},
+      themeColors.income,
+      themeColors.softIncome
+    );
     setShowAddModal(false);
     setNewCatName("");
   };
@@ -282,6 +349,19 @@ export default function CategoriesScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Custom Alert Modal Popup */}
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        icon={alertConfig.icon}
+        iconColor={alertConfig.iconColor}
+        iconBg={alertConfig.iconBg}
+        showCancel={alertConfig.showCancel}
+        onConfirm={alertConfig.onConfirm}
+        confirmText="OK"
+      />
     </SafeAreaView>
   );
 }

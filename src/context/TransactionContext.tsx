@@ -113,15 +113,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       try {
         // Load transactions from SQLite database
         const saved = dbService.getAllTransactions();
-        if (saved && saved.length > 0) {
-          setTransactions(saved);
-        } else {
-          // Seed initial transactions in SQLite
-          for (const t of defaultSeedData) {
-            dbService.addTransaction(t);
-          }
-          setTransactions(defaultSeedData);
-        }
+        setTransactions(saved || []);
 
         // Load custom categories from SQLite
         const customCats = dbService.getCustomCategories();

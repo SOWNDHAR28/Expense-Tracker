@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
   TextInput,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -20,19 +21,139 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTransactions } from "../context/TransactionContext";
 import { useTheme, ThemeMode } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { dbService } from "../storage/db";
 import ExpenseCard from "../components/ExpenseCard";
 import { expenseCategories } from "../constants/categories";
+import CustomAlertModal from "../components/CustomAlertModal";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 const { width } = Dimensions.get("window");
 
 export default function DashboardScreen() {
-  const { transactions, recentTransactions, incomeTotal, expenseTotal, netBalance } = useTransactions();
+  const { transactions, recentTransactions, incomeTotal, expenseTotal, netBalance, clearAll } = useTransactions();
   const { themeColors, isDark, themeMode, setThemeMode } = useTheme();
-  const { username, logout, signUp } = useAuth();
+  const { username, logout, signUp, deviceLockEnabled, setDeviceLockEnabled } = useAuth();
   const navigation = useNavigation<any>();
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [editedUsername, setEditedUsername] = useState("");
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  // Data Export States
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [exportRange, setExportRange] = useState<"weekly" | "monthly" | "custom">("weekly");
+  const [exportStartDate, setExportStartDate] = useState(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  const [exportEndDate, setExportEndDate] = useState(new Date());
+
+  // Custom Calendar Picker States for Export
+  const [pickingDateType, setPickingDateType] = useState<"start" | "end" | null>(null);
+  const [exportCalendarMonth, setExportCalendarMonth] = useState(new Date());
+
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const exportDaysInMonth = getDaysInMonth(exportCalendarMonth);
+  const exportStartDayIndex = getFirstDayOfMonth(exportCalendarMonth);
+
+  const prevExportMonth = () => {
+    setExportCalendarMonth(new Date(exportCalendarMonth.getFullYear(), exportCalendarMonth.getMonth() - 1, 1));
+  };
+
+  const nextExportMonth = () => {
+    setExportCalendarMonth(new Date(exportCalendarMonth.getFullYear(), exportCalendarMonth.getMonth() + 1, 1));
+  };
+
+  const handleExportDaySelect = (dayNum: number) => {
+    const chosen = new Date(exportCalendarMonth.getFullYear(), exportCalendarMonth.getMonth(), dayNum);
+    if (pickingDateType === "start") {
+      setExportStartDate(chosen);
+    } else if (pickingDateType === "end") {
+      setExportEndDate(chosen);
+    }
+    setPickingDateType(null);
+  };
+
+  const exportCalendarGridCells: (number | null)[] = [];
+  for (let i = 0; i < exportStartDayIndex; i++) {
+    exportCalendarGridCells.push(null);
+  }
+  for (let d = 1; d <= exportDaysInMonth; d++) {
+    exportCalendarGridCells.push(d);
+  }
+
+  const exportMonthLabel = exportCalendarMonth.toLocaleString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const handleExportData = async () => {
+    let startLimit = new Date();
+    let endLimit = new Date();
+
+    if (exportRange === "weekly") {
+      startLimit.setDate(endLimit.getDate() - 7);
+      startLimit.setHours(0, 0, 0, 0);
+    } else if (exportRange === "monthly") {
+      startLimit = new Date(endLimit.getFullYear(), endLimit.getMonth(), 1, 0, 0, 0);
+    } else {
+      startLimit = new Date(exportStartDate);
+      startLimit.setHours(0, 0, 0, 0);
+      endLimit = new Date(exportEndDate);
+      endLimit.setHours(23, 59, 59, 999);
+    }
+
+    const toExport = transactions.filter((t) => {
+      const txDate = new Date(t.date);
+      return txDate >= startLimit && txDate <= endLimit;
+    });
+
+    if (toExport.length === 0) {
+      Alert.alert("No Data", "There are no transactions to export in the selected period.");
+      return;
+    }
+
+    try {
+      let csvContent = "Date & Time,Type,Category,Amount,Note,Payment Method\n";
+      toExport.forEach((t) => {
+        const dateObj = new Date(t.date);
+        const dateStr = dateObj.toLocaleDateString("en-IN");
+        const timeStr = dateObj.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+        const dateTimeStr = `${dateStr}, ${timeStr}`;
+        const escapedNote = (t.note || "").replace(/"/g, '""');
+        const escapedCategory = t.category.replace(/"/g, '""');
+        csvContent += `"${dateTimeStr}","${t.type}","${escapedCategory}",${t.amount},"${escapedNote}","${t.paymentMethod}"\n`;
+      });
+
+      const filename = `Expense_Tracker_Export_${exportRange}_${Date.now()}.csv`;
+      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: FileSystem.EncodingType.UTF8 });
+
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      if (isSharingAvailable) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: "Export Transactions",
+          UTI: "public.comma-separated-values-text",
+        });
+      } else {
+        Alert.alert("Error", "Sharing is not available on this device.");
+      }
+    } catch (error: any) {
+      console.error("Export error:", error);
+      Alert.alert("Export Failed", error.message || "Failed to export data.");
+    }
+  };
 
   const handleUpdateUsername = async () => {
     const clean = editedUsername.trim();
@@ -49,17 +170,22 @@ export default function DashboardScreen() {
     }
   };
 
-  // Calculate expense breakdown by category for the home screen
-  const categoryBreakdown = expenseCategories
-    .map((cat) => {
-      const amount = transactions
-        .filter((t) => t.type === "expense" && t.category.toLowerCase() === cat.label.toLowerCase())
-        .reduce((sum, t) => sum + t.amount, 0);
-      const percentage = expenseTotal > 0 ? Math.round((amount / expenseTotal) * 100) : 0;
-      return { ...cat, amount, percentage };
-    })
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount);
+  // Calculate expense breakdown by category for the home screen (associated with Recent Transactions)
+  const categoryBreakdown = useMemo(() => {
+    const recentExpenses = recentTransactions.filter((t) => t.type === "expense");
+    const recentExpenseTotal = recentExpenses.reduce((sum, t) => sum + t.amount, 0);
+
+    return expenseCategories
+      .map((cat) => {
+        const amount = recentExpenses
+          .filter((t) => t.category.toLowerCase() === cat.label.toLowerCase())
+          .reduce((sum, t) => sum + t.amount, 0);
+        const percentage = recentExpenseTotal > 0 ? Math.round((amount / recentExpenseTotal) * 100) : 0;
+        return { ...cat, amount, percentage };
+      })
+      .filter((item) => item.amount > 0)
+      .sort((a, b) => a.amount - b.amount);
+  }, [recentTransactions, expenseCategories]);
 
   // Left Drawer (Menu & Settings)
   const [leftDrawerVisible, setLeftDrawerVisible] = useState(false);
@@ -111,22 +237,26 @@ export default function DashboardScreen() {
     });
   };
 
+  const handleResetApp = () => {
+    closeRightDrawer();
+    setShowResetModal(true);
+  };
+
   const handleLogout = () => {
     closeRightDrawer();
-    Alert.alert(
-      "Confirm Logout",
-      "Are you sure you want to log out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
-    );
+    setShowLogoutModal(true);
+  };
+
+  const confirmResetApp = async () => {
+    setShowResetModal(false);
+    dbService.clearAllData();
+    await clearAll();
+    await logout();
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
   };
 
   const themeLabel =
@@ -349,7 +479,132 @@ export default function DashboardScreen() {
                   </View>
                 )}
 
-                {/* 2. About App Dropdown */}
+                {/* 2. Data Export Dropdown */}
+                <TouchableOpacity
+                  style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
+                  onPress={() => setShowExportOptions(!showExportOptions)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.itemLeft}>
+                    <View style={[styles.itemIcon, { backgroundColor: themeColors.softIncome }]}>
+                      <MaterialCommunityIcons name="file-export-outline" size={20} color={themeColors.income} />
+                    </View>
+                    <Text style={[styles.itemText, { color: themeColors.text }]}>Data Export</Text>
+                  </View>
+                  <View style={styles.itemRight}>
+                    <Ionicons name={showExportOptions ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.muted} />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Data Export Sub-Panel */}
+                {showExportOptions && (
+                  <View style={[styles.dropdownSubPanel, { backgroundColor: themeColors.surface, padding: 12 }]}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: themeColors.text, marginBottom: 8 }}>
+                      Select Timeframe
+                    </Text>
+
+                    {/* Timeframe Selector Button Group */}
+                    <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                      {(["weekly", "monthly", "custom"] as const).map((range) => {
+                        const active = exportRange === range;
+                        return (
+                          <TouchableOpacity
+                            key={range}
+                            style={{
+                              flex: 1,
+                              height: 38,
+                              borderRadius: 10,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: 1.5,
+                              borderColor: active ? themeColors.primary : themeColors.border,
+                              backgroundColor: active ? themeColors.softPurple : themeColors.card,
+                            }}
+                            onPress={() => setExportRange(range)}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: active ? themeColors.primary : themeColors.muted, textTransform: "capitalize" }}>
+                              {range}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Custom Date Pickers */}
+                    {exportRange === "custom" && (
+                      <View style={{ gap: 8, marginBottom: 12 }}>
+                        {/* Start Date */}
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            height: 44,
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            backgroundColor: themeColors.card,
+                            borderWidth: 1,
+                            borderColor: themeColors.border,
+                          }}
+                          onPress={() => {
+                            setExportCalendarMonth(exportStartDate);
+                            setPickingDateType("start");
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: themeColors.muted }}>Start Date:</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: themeColors.text }}>
+                            {exportStartDate.toLocaleDateString("en-IN")}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* End Date */}
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            height: 44,
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            backgroundColor: themeColors.card,
+                            borderWidth: 1,
+                            borderColor: themeColors.border,
+                          }}
+                          onPress={() => {
+                            setExportCalendarMonth(exportEndDate);
+                            setPickingDateType("end");
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: themeColors.muted }}>End Date:</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: themeColors.text }}>
+                            {exportEndDate.toLocaleDateString("en-IN")}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Export Button */}
+                    <TouchableOpacity
+                      style={{
+                        height: 44,
+                        borderRadius: 12,
+                        backgroundColor: themeColors.primary,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      onPress={handleExportData}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="file-excel-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
+                        Export as Spreadsheet
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* 3. About App Dropdown */}
                 <TouchableOpacity
                   style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
                   onPress={() => setShowAboutOptions(!showAboutOptions)}
@@ -460,13 +715,31 @@ export default function DashboardScreen() {
                     </View>
                   )}
 
-                  <View style={[styles.securityBadge, { backgroundColor: themeColors.softPurple, marginTop: 4 }]}>
-                    <Ionicons name="lock-closed" size={14} color={themeColors.primary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.securityBadgeText, { color: themeColors.primary }]}>
-                      Device Lock Active
-                    </Text>
+                  <View style={[styles.securityBadge, { backgroundColor: themeColors.softPurple, marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: themeColors.border }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="lock-closed" size={16} color={themeColors.primary} style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: themeColors.text }}>
+                        Device Lock
+                      </Text>
+                    </View>
+                    <Switch
+                      value={deviceLockEnabled}
+                      onValueChange={setDeviceLockEnabled}
+                      trackColor={{ false: themeColors.border, true: themeColors.primary }}
+                      thumbColor={Platform.OS === "android" ? (deviceLockEnabled ? themeColors.card : "#f4f3f4") : undefined}
+                    />
                   </View>
                 </View>
+
+                {/* Clear Data Button */}
+                <TouchableOpacity
+                  style={[styles.logoutButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border, marginBottom: 12 }]}
+                  onPress={handleResetApp}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="trash-can-outline" size={20} color={themeColors.expense} style={{ marginRight: 8 }} />
+                  <Text style={[styles.logoutText, { color: themeColors.expense }]}>Clear Data</Text>
+                </TouchableOpacity>
 
                 {/* Logout Button */}
                 <TouchableOpacity
@@ -481,6 +754,120 @@ export default function DashboardScreen() {
             </View>
           </Animated.View>
         </View>
+      </Modal>
+      {/* Custom HSL Modals */}
+      <CustomAlertModal
+        visible={showResetModal}
+        title="Reset App & Clear Data"
+        message="Are you sure you want to delete all transactions, custom categories, and reset your profile? This action cannot be undone."
+        icon="trash-outline"
+        confirmText="Reset Everything"
+        onCancel={() => setShowResetModal(false)}
+        onConfirm={confirmResetApp}
+      />
+
+      <CustomAlertModal
+        visible={showLogoutModal}
+        title="Confirm Logout"
+        message="Are you sure you want to log out of your profile session?"
+        icon="log-out-outline"
+        iconColor={themeColors.primary}
+        iconBg={themeColors.softPurple}
+        confirmText="Logout"
+        confirmColor={themeColors.primary}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={confirmLogout}
+      />
+
+      {/* Custom Styled Premium Calendar Modal for Export Start/End dates */}
+      <Modal
+        visible={pickingDateType !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPickingDateType(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setPickingDateType(null)}>
+          <View style={styles.calendarModalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.calendarModalContent, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+                {/* Modal Header */}
+                <View style={styles.calendarModalHeader}>
+                  <Text style={[styles.calendarModalTitle, { color: themeColors.text }]}>
+                    Select {pickingDateType === "start" ? "Start Date" : "End Date"}
+                  </Text>
+                  <TouchableOpacity onPress={() => setPickingDateType(null)}>
+                    <Ionicons name="close" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Calendar Navigation */}
+                <View style={styles.calendarNavRow}>
+                  <TouchableOpacity onPress={prevExportMonth} style={styles.navBtn}>
+                    <Ionicons name="chevron-back" size={20} color={themeColors.text} />
+                  </TouchableOpacity>
+                  <Text style={[styles.calendarMonthLabel, { color: themeColors.text }]}>
+                    {exportMonthLabel}
+                  </Text>
+                  <TouchableOpacity onPress={nextExportMonth} style={styles.navBtn}>
+                    <Ionicons name="chevron-forward" size={20} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Weekdays Row */}
+                <View style={styles.weekdaysRow}>
+                  {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((dayName) => (
+                    <Text key={dayName} style={[styles.weekdayText, { color: themeColors.muted }]}>
+                      {dayName}
+                    </Text>
+                  ))}
+                </View>
+
+                {/* Days Grid */}
+                <View style={styles.daysGrid}>
+                  {exportCalendarGridCells.map((dayNum, index) => {
+                    if (dayNum === null) {
+                      return <View key={`empty-${index}`} style={styles.dayCell} />;
+                    }
+
+                    const isToday =
+                      new Date().getDate() === dayNum &&
+                      new Date().getMonth() === exportCalendarMonth.getMonth() &&
+                      new Date().getFullYear() === exportCalendarMonth.getFullYear();
+
+                    const currentSelected = pickingDateType === "start" ? exportStartDate : exportEndDate;
+                    const isSelected =
+                      currentSelected !== null &&
+                      currentSelected.getDate() === dayNum &&
+                      currentSelected.getMonth() === exportCalendarMonth.getMonth() &&
+                      currentSelected.getFullYear() === exportCalendarMonth.getFullYear();
+
+                    return (
+                      <TouchableOpacity
+                        key={`day-${dayNum}`}
+                        style={[
+                          styles.dayCell,
+                          isSelected && { backgroundColor: themeColors.primary },
+                          isToday && !isSelected && { borderColor: themeColors.primary, borderWidth: 1.5 },
+                        ]}
+                        onPress={() => handleExportDaySelect(dayNum)}
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            { color: isSelected ? "#FFFFFF" : themeColors.text },
+                            isSelected && { fontWeight: "800" },
+                          ]}
+                        >
+                          {dayNum}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );
@@ -654,6 +1041,13 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
   },
+  calendarModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
   backdrop: {
     position: "absolute",
     top: 0,
@@ -815,5 +1209,69 @@ const styles = StyleSheet.create({
   },
   editDoneBtn: {
     padding: 2,
+  },
+  /* Custom Modal Overlay Calendar Styles */
+  calendarModalContent: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  calendarModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  calendarModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  calendarNavRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  navBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
+  calendarMonthLabel: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  weekdaysRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  weekdayText: {
+    width: "14.28%",
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  daysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
+  },
+  dayCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+  },
+  dayText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

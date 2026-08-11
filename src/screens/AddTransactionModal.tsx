@@ -22,52 +22,55 @@ export default function AddTransactionModal() {
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={[styles.closeButton, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+            style={[styles.closeButton, { backgroundColor: themeColors.softExpense, borderColor: themeColors.expense + "44" }]}
           >
-            <Ionicons name="close" size={26} color={themeColors.text} />
+            <Ionicons name="close" size={26} color={themeColors.expense} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: themeColors.text }]}>Add Transaction</Text>
           <View style={{ width: 46 }} />
         </View>
 
-        {/* Prompt */}
-        <Text style={[styles.promptTitle, { color: themeColors.text }]}>
-          What do you want to add?
-        </Text>
-
-        {/* Option 1: Income */}
-        <TouchableOpacity
-          style={[styles.optionCard, { backgroundColor: themeColors.softIncome, borderColor: themeColors.income + "44" }]}
-          activeOpacity={0.85}
-          onPress={() => {
-            navigation.replace("AddIncome");
-          }}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: themeColors.income }]}>
-            <Ionicons name="arrow-down" size={22} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.cardTitle, { color: themeColors.text }]}>Income</Text>
-          <Text style={[styles.cardSubtitle, { color: themeColors.muted }]}>
-            Add money you received
+        {/* Vertically Centered Content */}
+        <View style={styles.centerContent}>
+          {/* Prompt */}
+          <Text style={[styles.promptTitle, { color: themeColors.text }]}>
+            What do you want to add?
           </Text>
-        </TouchableOpacity>
 
-        {/* Option 2: Expense */}
-        <TouchableOpacity
-          style={[styles.optionCard, { backgroundColor: themeColors.softExpense, borderColor: themeColors.expense + "44" }]}
-          activeOpacity={0.85}
-          onPress={() => {
-            navigation.replace("AddExpense");
-          }}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: themeColors.expense }]}>
-            <Ionicons name="arrow-up" size={22} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.cardTitle, { color: themeColors.text }]}>Expense</Text>
-          <Text style={[styles.cardSubtitle, { color: themeColors.muted }]}>
-            Add money you spent
-          </Text>
-        </TouchableOpacity>
+          {/* Option 1: Income */}
+          <TouchableOpacity
+            style={[styles.optionCard, { backgroundColor: themeColors.softIncome, borderColor: themeColors.income + "44" }]}
+            activeOpacity={0.85}
+            onPress={() => {
+              navigation.replace("AddIncome");
+            }}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: themeColors.income }]}>
+              <Ionicons name="arrow-down" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Income</Text>
+            <Text style={[styles.cardSubtitle, { color: themeColors.muted }]}>
+              Add money you received
+            </Text>
+          </TouchableOpacity>
+
+          {/* Option 2: Expense */}
+          <TouchableOpacity
+            style={[styles.optionCard, { backgroundColor: themeColors.softExpense, borderColor: themeColors.expense + "44" }]}
+            activeOpacity={0.85}
+            onPress={() => {
+              navigation.replace("AddExpense");
+            }}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: themeColors.expense }]}>
+              <Ionicons name="arrow-up" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Expense</Text>
+            <Text style={[styles.cardSubtitle, { color: themeColors.muted }]}>
+              Add money you spent
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -78,7 +81,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    paddingTop: Platform.OS === "ios" ? 44 : 32, // Bring down to clear notches
+    paddingTop: Platform.OS === "ios" ? 64 : 48, // Bring down to clear notches and align lower
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingBottom: 40,
   },
   header: {
     flexDirection: "row",
@@ -87,7 +95,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   closeButton: {
-    width: 46, // Slightly larger close button wrapper
+    width: 46,
     height: 46,
     borderRadius: 16,
     alignItems: "center",

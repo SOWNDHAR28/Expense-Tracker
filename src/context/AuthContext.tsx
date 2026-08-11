@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import * as LocalAuthentication from "expo-local-authentication";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { readJSON, removeKey, writeJSON } from "../utils/storage";
 import { dbService } from "../storage/db";
 
@@ -18,6 +19,9 @@ type AuthContextValue = {
   loading: boolean;
   username: string | null;
   hasAccount: boolean;
+  deviceLockEnabled: boolean;
+  justLoggedOut: boolean;
+  setDeviceLockEnabled: (enabled: boolean) => Promise<void>;
   signUp: (username: string) => Promise<{ ok: boolean; error?: string }>;
   signIn: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -29,15 +33,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [account, setAccount] = useState<AuthRecord | null>(null);
   const [activeUser, setActiveUser] = useState<string | null>(null);
+  const [deviceLockEnabled, setDeviceLockEnabledState] = useState(true);
+  const [justLoggedOut, setJustLoggedOut] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const saved = dbService.getUser();
         setAccount(saved);
+
+        const lockSetting = await AsyncStorage.getItem("et_device_lock_enabled");
+        if (lockSetting === "false") {
+          setDeviceLockEnabledState(false);
+        }
+
         // Do not auto-login on returning visits, they must unlock first.
-        // Except for web development fallback
-        if (saved && typeof window !== "undefined" && window.location?.hostname === "localhost") {
+        // Except for web development fallback or if device lock is turned off
+        const finalLockEnabled = lockSetting !== "false";
+        if (saved && (!finalLockEnabled || (typeof window !== "undefined" && window.location?.hostname === "localhost"))) {
           setActiveUser(saved.username);
         }
       } catch (err) {
@@ -53,12 +66,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       username: activeUser,
       hasAccount: !!account,
+      deviceLockEnabled,
+      justLoggedOut,
+      setDeviceLockEnabled: async (enabled: boolean) => {
+        try {
+          setDeviceLockEnabledState(enabled);
+          await AsyncStorage.setItem("et_device_lock_enabled", String(enabled));
+        } catch (error) {
+          console.error("Failed to save device lock settings:", error);
+        }
+      },
       signUp: async (username) => {
         const cleanUser = username.trim();
         if (!cleanUser) {
           return { ok: false, error: "Please enter your name." };
         }
 
+        setJustLoggedOut(false);
         // Save username locally with a mock pin placeholder
         dbService.createUser(cleanUser, "native_device_lock");
         setAccount({ username: cleanUser, pin: "native_device_lock" });
@@ -69,6 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const saved = dbService.getUser();
         if (!saved) {
           return { ok: false, error: "No profile found." };
+        }
+
+        setJustLoggedOut(false);
+        // If lock is disabled, sign in immediately
+        if (!deviceLockEnabled) {
+          setActiveUser(saved.username);
+          return { ok: true };
         }
 
         try {
@@ -103,10 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       logout: async () => {
+        const saved = dbService.getUser();
+        setAccount(saved);
+        setJustLoggedOut(true);
         setActiveUser(null);
       },
     }),
-    [loading, account, activeUser]
+    [loading, account, activeUser, deviceLockEnabled, justLoggedOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

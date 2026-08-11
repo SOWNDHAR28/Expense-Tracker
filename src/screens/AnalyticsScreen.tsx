@@ -18,7 +18,7 @@ import Svg, { Circle } from "react-native-svg";
 type TimeRange = "Week" | "Month" | "Year";
 
 export default function AnalyticsScreen() {
-  const { transactions, incomeTotal, expenseTotal, netBalance, savingsRate, incomeCategories, expenseCategories } = useTransactions();
+  const { transactions, incomeCategories, expenseCategories } = useTransactions();
   const { themeColors } = useTheme();
 
   const [timeRange, setTimeRange] = useState<TimeRange>("Month");
@@ -26,34 +26,78 @@ export default function AnalyticsScreen() {
   // Interactive Donut States
   const [activeChartType, setActiveChartType] = useState<"expense" | "income">("expense");
 
-  // Custom Calendar Filter States
+  // Custom Calendar & Month Filter States
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
-  // Filter transactions based on selected date
-  const filteredTransactions = selectedDate
-    ? transactions.filter(
+  const navPrevMonth = () => {
+    const prev = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() - 1, 1);
+    setSelectedMonthDate(prev);
+    setSelectedDate(null);
+  };
+
+  const navNextMonth = () => {
+    const next = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 1);
+    setSelectedMonthDate(next);
+    setSelectedDate(null);
+  };
+
+  // Filter transactions based on selected date OR active timeRange & month date
+  const filteredTransactions = useMemo(() => {
+    if (selectedDate) {
+      return transactions.filter(
         (t) => new Date(t.date).toDateString() === selectedDate.toDateString()
-      )
-    : transactions;
+      );
+    }
+
+    const year = selectedMonthDate.getFullYear();
+    const month = selectedMonthDate.getMonth();
+
+    if (timeRange === "Month") {
+      return transactions.filter((t) => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year && d.getMonth() === month;
+      });
+    }
+
+    if (timeRange === "Year") {
+      return transactions.filter((t) => {
+        const d = new Date(t.date);
+        return d.getFullYear() === year;
+      });
+    }
+
+    // Week: filter transactions for the 7-day period of the active month (selectedMonthDate)
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
+    
+    const endDate = isCurrentMonth ? now : new Date(year, month + 1, 0, 23, 59, 59);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 7);
+    startDate.setHours(0, 0, 0, 0);
+
+    return transactions.filter((t) => {
+      const txDate = new Date(t.date);
+      return txDate >= startDate && txDate <= endDate;
+    });
+  }, [transactions, selectedDate, selectedMonthDate, timeRange]);
 
   // Calculate dynamic totals for the selected period
-  const displayIncomeTotal = selectedDate
-    ? filteredTransactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0)
-    : incomeTotal > 0 ? incomeTotal : 50000;
+  const displayIncomeTotal = useMemo(() => {
+    return filteredTransactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  }, [filteredTransactions]);
 
-  const displayExpenseTotal = selectedDate
-    ? filteredTransactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0)
-    : expenseTotal > 0 ? expenseTotal : 12350;
+  const displayExpenseTotal = useMemo(() => {
+    return filteredTransactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  }, [filteredTransactions]);
 
-  const displayNetBalance = selectedDate
-    ? displayIncomeTotal - displayExpenseTotal
-    : incomeTotal > 0 ? netBalance : 37650;
+  const displayNetBalance = displayIncomeTotal - displayExpenseTotal;
 
-  const displaySavingsRate = selectedDate
-    ? (displayIncomeTotal > 0 ? Number(((displayNetBalance / displayIncomeTotal) * 100).toFixed(1)) : 0)
-    : incomeTotal > 0 ? savingsRate : 75.3;
+  const displaySavingsRate = displayIncomeTotal > 0
+    ? Number(((displayNetBalance / displayIncomeTotal) * 100).toFixed(1))
+    : 0;
 
   // Calculate breakdown categories based on active chart selection
   const targetCategories = activeChartType === "expense" ? expenseCategories : incomeCategories;
@@ -73,29 +117,8 @@ export default function AnalyticsScreen() {
     })
     .filter((item) => item.amount > 0);
 
-  // Fallback seed breakdown in case there is no transaction logged yet
-  const sampleExpenses = [
-    { label: "Food", amount: 7900, color: "#E74C3C" }, // 79% matching user message
-    { label: "Transport", amount: 2100, color: "#3498DB" }, // 21%
-  ];
-
-  const sampleIncome = [
-    { label: "Salary", amount: 40000, color: "#2ECC71" },
-    { label: "Freelance", amount: 10000, color: "#1ABC9C" },
-  ];
-
-  const hasData = categoryBreakdown.length > 0;
-  const breakdownToDisplay = hasData
-    ? categoryBreakdown
-    : activeChartType === "expense"
-    ? sampleExpenses
-    : sampleIncome;
-
-  const activeTotalValue = hasData
-    ? targetTotal
-    : activeChartType === "expense"
-    ? 10000
-    : 50000;
+  const breakdownToDisplay = categoryBreakdown;
+  const activeTotalValue = targetTotal;
 
   // SVG Segmented Donut dimensions
   const radius = 70;
@@ -218,63 +241,55 @@ export default function AnalyticsScreen() {
 
         {/* Month Selector Bar */}
         <View style={styles.monthBar}>
-          <TouchableOpacity style={styles.monthNavBtn}>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={navPrevMonth}>
             <Ionicons name="chevron-back" size={20} color={themeColors.text} />
           </TouchableOpacity>
-          <Text style={[styles.monthText, { color: themeColors.text }]}>August 2026</Text>
-          <TouchableOpacity style={styles.monthNavBtn}>
+          <Text style={[styles.monthText, { color: themeColors.text }]}>
+            {selectedMonthDate.toLocaleString("en-IN", { month: "long", year: "numeric" })}
+          </Text>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={navNextMonth}>
             <Ionicons name="chevron-forward" size={20} color={themeColors.text} />
           </TouchableOpacity>
         </View>
 
         {/* Stat Cards 2x2 Grid */}
         <View style={styles.statsGrid}>
-          {/* Income Card - Interactive Clickable */}
-          <TouchableOpacity
+          {/* Income Card - Non-interactive */}
+          <View
             style={[
               styles.statCard,
               {
                 backgroundColor: themeColors.softIncome,
                 borderColor: themeColors.income,
-                borderWidth: activeChartType === "income" ? 2.5 : 1,
+                borderWidth: 1.5,
               },
             ]}
-            activeOpacity={0.8}
-            onPress={() => setActiveChartType("income")}
           >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={[styles.statCardLabel, { color: themeColors.text }]}>Income</Text>
-              {activeChartType === "income" && <Ionicons name="checkmark-circle" size={16} color={themeColors.income} />}
-            </View>
+            <Text style={[styles.statCardLabel, { color: themeColors.text }]}>Income</Text>
             <Text style={[styles.statCardValue, { color: themeColors.income }]}>
               ₹{displayIncomeTotal.toLocaleString("en-IN")}
             </Text>
-          </TouchableOpacity>
+          </View>
 
-          {/* Expenses Card - Interactive Clickable */}
-          <TouchableOpacity
+          {/* Expenses Card - Non-interactive */}
+          <View
             style={[
               styles.statCard,
               {
                 backgroundColor: themeColors.softExpense,
                 borderColor: themeColors.expense,
-                borderWidth: activeChartType === "expense" ? 2.5 : 1,
+                borderWidth: 1.5,
               },
             ]}
-            activeOpacity={0.8}
-            onPress={() => setActiveChartType("expense")}
           >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={[styles.statCardLabel, { color: themeColors.text }]}>Expenses</Text>
-              {activeChartType === "expense" && <Ionicons name="checkmark-circle" size={16} color={themeColors.expense} />}
-            </View>
+            <Text style={[styles.statCardLabel, { color: themeColors.text }]}>Expenses</Text>
             <Text style={[styles.statCardValue, { color: themeColors.expense }]}>
               ₹{displayExpenseTotal.toLocaleString("en-IN")}
             </Text>
-          </TouchableOpacity>
+          </View>
 
           {/* Net Balance Card */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.softPurple, borderColor: themeColors.primary + "22", borderWidth: 1 }]}>
+          <View style={[styles.statCard, { backgroundColor: themeColors.softPurple, borderColor: themeColors.primary, borderWidth: 1.5 }]}>
             <Text style={[styles.statCardLabel, { color: themeColors.primary, fontWeight: "700" }]}>Net Balance</Text>
             <Text style={[styles.statCardValue, { color: displayNetBalance >= 0 ? themeColors.primary : themeColors.expense }]}>
               ₹{displayNetBalance.toLocaleString("en-IN")}
@@ -282,7 +297,7 @@ export default function AnalyticsScreen() {
           </View>
 
           {/* Savings Rate Card */}
-          <View style={[styles.statCard, { backgroundColor: themeColors.softBlue }]}>
+          <View style={[styles.statCard, { backgroundColor: themeColors.softBlue, borderColor: themeColors.primary, borderWidth: 1.5 }]}>
             <Text style={[styles.statCardLabel, { color: themeColors.text }]} numberOfLines={1}>
               Savings Rate
             </Text>
@@ -300,10 +315,48 @@ export default function AnalyticsScreen() {
           </View>
         </View>
 
-        {/* Expense/Income by Category Section */}
-        <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-          {activeChartType === "expense" ? "Expenses" : "Income"} by Category
-        </Text>
+        {/* Expense/Income by Category Section Header & Toggle Switch */}
+        <View style={styles.chartTitleRow}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text, marginBottom: 0 }]}>
+            {activeChartType === "expense" ? "Expenses" : "Income"} by Category
+          </Text>
+          <View style={[styles.toggleContainer, { backgroundColor: themeColors.surface }]}>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                activeChartType === "expense" && { backgroundColor: themeColors.card },
+              ]}
+              onPress={() => setActiveChartType("expense")}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: activeChartType === "expense" ? themeColors.primary : themeColors.muted },
+                ]}
+              >
+                Expenses
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                activeChartType === "income" && { backgroundColor: themeColors.card },
+              ]}
+              onPress={() => setActiveChartType("income")}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: activeChartType === "income" ? themeColors.primary : themeColors.muted },
+                ]}
+              >
+                Income
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         <View style={[styles.chartCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
           
           {/* Dynamic SVG Segmented Donut Chart */}
@@ -351,27 +404,35 @@ export default function AnalyticsScreen() {
 
           {/* Category Breakdown List with Tooltip info (percent & value labels) */}
           <View style={styles.breakdownList}>
-            {breakdownToDisplay.map((item) => {
-              const percentage = activeTotalValue > 0 ? Math.round((item.amount / activeTotalValue) * 100) : 0;
-              return (
-                <View key={item.label} style={styles.breakdownRow}>
-                  <View style={styles.rowLeft}>
-                    <View style={[styles.dot, { backgroundColor: item.color }]} />
-                    <Text style={[styles.categoryLabelText, { color: themeColors.text }]}>
-                      {item.label}
-                    </Text>
+            {breakdownToDisplay.length === 0 ? (
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: themeColors.muted }}>
+                  No {activeChartType === "expense" ? "expense" : "income"} transactions recorded
+                </Text>
+              </View>
+            ) : (
+              breakdownToDisplay.map((item) => {
+                const percentage = activeTotalValue > 0 ? Math.round((item.amount / activeTotalValue) * 100) : 0;
+                return (
+                  <View key={item.label} style={styles.breakdownRow}>
+                    <View style={styles.rowLeft}>
+                      <View style={[styles.dot, { backgroundColor: item.color }]} />
+                      <Text style={[styles.categoryLabelText, { color: themeColors.text }]}>
+                        {item.label}
+                      </Text>
+                    </View>
+                    <View style={styles.rowRight}>
+                      <Text style={[styles.categoryPercentText, { color: themeColors.muted }]}>
+                        {percentage}%
+                      </Text>
+                      <Text style={[styles.categoryAmountText, { color: themeColors.text }]}>
+                        ₹{item.amount.toLocaleString("en-IN")}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.rowRight}>
-                    <Text style={[styles.categoryPercentText, { color: themeColors.muted }]}>
-                      {percentage}%
-                    </Text>
-                    <Text style={[styles.categoryAmountText, { color: themeColors.text }]}>
-                      ₹{item.amount.toLocaleString("en-IN")}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </View>
       </ScrollView>
@@ -714,6 +775,27 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 13,
+    fontWeight: "700",
+  },
+  chartTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    marginTop: 18,
+  },
+  toggleContainer: {
+    flexDirection: "row",
+    borderRadius: 10,
+    padding: 2,
+  },
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  toggleText: {
+    fontSize: 12,
     fontWeight: "700",
   },
 });

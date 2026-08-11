@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Platform,
   Share,
 } from "react-native";
@@ -14,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme, ThemeMode } from "../context/ThemeContext";
 import { useTransactions } from "../context/TransactionContext";
+import CustomAlertModal from "../components/CustomAlertModal";
 
 export default function SettingsScreen() {
   const { username, logout } = useAuth();
@@ -21,21 +21,67 @@ export default function SettingsScreen() {
   const { exportDataJSON, exportDataCSV } = useTransactions();
 
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showExportSubPanel, setShowExportSubPanel] = useState(false);
+
+  // Custom Alert Modal configuration
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon: string;
+    iconColor?: string;
+    iconBg?: string;
+    showCancel: boolean;
+    onConfirm: () => void;
+    confirmText?: string;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    icon: "alert-circle-outline",
+    showCancel: false,
+    onConfirm: () => {},
+    confirmText: "OK",
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    icon = "alert-circle-outline",
+    showCancel = false,
+    onConfirm = () => {},
+    iconColor?: string,
+    iconBg?: string,
+    confirmText = "OK"
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      icon,
+      showCancel,
+      onConfirm: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        onConfirm();
+      },
+      iconColor,
+      iconBg,
+      confirmText,
+    });
+  };
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       "Confirm Logout",
       "Are you sure you want to log out of your account?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
+      "log-out-outline",
+      true,
+      async () => {
+        await logout();
+      },
+      themeColors.expense,
+      themeColors.softExpense,
+      "Logout"
     );
   };
 
@@ -54,25 +100,53 @@ export default function SettingsScreen() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        Alert.alert("Export Success", `Your data has been exported as ${title}`);
+        showAlert(
+          "Export Success",
+          `Your data has been exported as ${title}`,
+          "checkmark-circle-outline",
+          false,
+          () => {},
+          themeColors.income,
+          themeColors.softIncome
+        );
       } catch {
-        Alert.alert("Data Export", data.slice(0, 300) + "\n...");
+        showAlert(
+          "Data Export",
+          data.slice(0, 300) + "\n...",
+          "document-text-outline",
+          false,
+          () => {},
+          themeColors.primary,
+          themeColors.softPurple
+        );
       }
     } else {
       Share.share({
         title: "Export Expense Tracker Data",
         message: data,
       }).catch(() => {
-        Alert.alert("Export Error", "Unable to share data export.");
+        showAlert(
+          "Export Error",
+          "Unable to share data export.",
+          "alert-circle-outline",
+          false,
+          () => {},
+          themeColors.expense,
+          themeColors.softExpense
+        );
       });
     }
   };
 
   const handleAboutApp = () => {
-    Alert.alert(
+    showAlert(
       "About Expense Tracker",
       "Version 1.0.0\n\nA minimal, fast, and modern expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• 4-Digit Security PIN & Username Auth\n• System Dark & Light Theme Support\n• Data Export (JSON/CSV)",
-      [{ text: "OK" }]
+      "information-circle-outline",
+      false,
+      () => {},
+      themeColors.primary,
+      themeColors.softPurple
     );
   };
 
@@ -157,13 +231,7 @@ export default function SettingsScreen() {
           {/* 2. Export Data */}
           <TouchableOpacity
             style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
-            onPress={() => {
-              Alert.alert("Export Data Format", "Choose export format:", [
-                { text: "Export JSON", onPress: () => handleExportData("json") },
-                { text: "Export CSV", onPress: () => handleExportData("csv") },
-                { text: "Cancel", style: "cancel" },
-              ]);
-            }}
+            onPress={() => setShowExportSubPanel(!showExportSubPanel)}
             activeOpacity={0.7}
           >
             <View style={styles.itemLeft}>
@@ -172,8 +240,36 @@ export default function SettingsScreen() {
               </View>
               <Text style={[styles.itemText, { color: themeColors.text }]}>Data Export</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={themeColors.muted} />
+            <View style={styles.itemRight}>
+              <Ionicons name={showExportSubPanel ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.muted} />
+            </View>
           </TouchableOpacity>
+
+          {/* Export Format Selector Sub-Panel */}
+          {showExportSubPanel && (
+            <View style={[styles.themeSubPanel, { backgroundColor: themeColors.surface }]}>
+              <TouchableOpacity
+                style={styles.themeOptionBtn}
+                onPress={() => {
+                  handleExportData("json");
+                  setShowExportSubPanel(false);
+                }}
+              >
+                <Text style={[styles.themeOptionText, { color: themeColors.text }]}>Export JSON</Text>
+                <Ionicons name="document-text-outline" size={18} color={themeColors.muted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.themeOptionBtn}
+                onPress={() => {
+                  handleExportData("csv");
+                  setShowExportSubPanel(false);
+                }}
+              >
+                <Text style={[styles.themeOptionText, { color: themeColors.text }]}>Export CSV</Text>
+                <Ionicons name="grid-outline" size={18} color={themeColors.muted} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* 3. About App */}
           <TouchableOpacity
@@ -201,6 +297,19 @@ export default function SettingsScreen() {
           <Text style={[styles.logoutText, { color: themeColors.expense }]}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Custom Alert Modal Popup */}
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        icon={alertConfig.icon}
+        iconColor={alertConfig.iconColor}
+        iconBg={alertConfig.iconBg}
+        showCancel={alertConfig.showCancel}
+        onConfirm={alertConfig.onConfirm}
+        confirmText={alertConfig.confirmText}
+      />
     </SafeAreaView>
   );
 }

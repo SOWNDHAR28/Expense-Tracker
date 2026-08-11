@@ -15,17 +15,18 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 export default function AuthScreen() {
-  const { hasAccount, signIn, signUp } = useAuth();
+  const { hasAccount, signIn, signUp, justLoggedOut } = useAuth();
   const { themeColors } = useTheme();
 
   const [username, setUsername] = useState("");
 
-  // Trigger local lockscreen authentication automatically on returning visit
+  // Trigger local lockscreen authentication automatically on returning visit (on mount only)
   useEffect(() => {
-    if (hasAccount) {
+    if (hasAccount && !justLoggedOut) {
       void handleUnlock();
     }
-  }, [hasAccount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleUnlock = async () => {
     const res = await signIn();

@@ -1,11 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -14,14 +13,18 @@ import { useTransactions } from "../context/TransactionContext";
 import { useTheme } from "../context/ThemeContext";
 import { getCategoryMeta } from "../constants/categories";
 import { Transaction } from "../types/expense";
+import CustomAlertModal from "../components/CustomAlertModal";
 
 export default function TransactionDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { deleteTransaction } = useTransactions();
+  const { deleteTransaction, transactions } = useTransactions();
   const { themeColors } = useTheme();
 
-  const transaction: Transaction | undefined = route.params?.transaction;
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const transactionId = route.params?.transaction?.id;
+  const transaction = transactions.find((t) => t.id === transactionId);
 
   if (!transaction) {
     return (
@@ -44,21 +47,13 @@ export default function TransactionDetailsScreen() {
     : `-₹${transaction.amount.toLocaleString("en-IN")}`;
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Transaction?",
-      "Are you sure you want to delete this record?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            await deleteTransaction(transaction.id);
-            navigation.goBack();
-          },
-        },
-      ]
-    );
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setShowDeleteModal(false);
+    await deleteTransaction(transaction.id);
+    navigation.goBack();
   };
 
   const handleEdit = () => {
@@ -88,9 +83,7 @@ export default function TransactionDetailsScreen() {
           <Ionicons name="chevron-back" size={24} color={themeColors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: themeColors.text }]}>Transaction Details</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="ellipsis-vertical" size={20} color={themeColors.text} />
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
@@ -195,6 +188,18 @@ export default function TransactionDetailsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Delete Confirmation Alert Modal */}
+      <CustomAlertModal
+        visible={showDeleteModal}
+        title="Delete Transaction?"
+        message="Are you sure you want to delete this record? This action cannot be undone."
+        icon="trash-outline"
+        confirmText="Delete"
+        confirmColor={themeColors.expense}
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </SafeAreaView>
   );
 }
