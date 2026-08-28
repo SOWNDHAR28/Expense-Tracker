@@ -9,7 +9,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector, useAppDispatch } from "../redux/hooks";
+import { deleteTransaction } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
 import { getCategoryMeta } from "../constants/categories";
 import { Transaction } from "../types/expense";
@@ -18,7 +19,8 @@ import CustomAlertModal from "../components/CustomAlertModal";
 export default function TransactionDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { deleteTransaction, transactions } = useTransactions();
+  const transactions = useAppSelector((state) => state.transactions.items);
+  const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -52,8 +54,12 @@ export default function TransactionDetailsScreen() {
 
   const handleConfirmDelete = async () => {
     setShowDeleteModal(false);
-    await deleteTransaction(transaction.id);
-    navigation.goBack();
+    try {
+      await dispatch(deleteTransaction(transaction.id)).unwrap();
+      navigation.goBack();
+    } catch (error) {
+      alert("Failed to delete transaction.");
+    }
   };
 
   const handleEdit = () => {

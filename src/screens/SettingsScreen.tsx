@@ -10,15 +10,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useAuth } from "../context/AuthContext";
 import { useTheme, ThemeMode } from "../context/ThemeContext";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector, useAppDispatch } from "../redux/hooks";
 import CustomAlertModal from "../components/CustomAlertModal";
 
 export default function SettingsScreen() {
-  const { username, logout } = useAuth();
   const { themeMode, setThemeMode, themeColors } = useTheme();
-  const { exportDataJSON, exportDataCSV } = useTransactions();
+  const transactions = useAppSelector((state) => state.transactions.items);
+  const user = useAppSelector((state) => state.auth.user);
+  const username = user?.email?.split('@')[0] || "User";
+  const dispatch = useAppDispatch();
+
+  const exportDataJSON = () => {
+    return JSON.stringify(transactions, null, 2);
+  };
+
+  const exportDataCSV = () => {
+    if (transactions.length === 0) return "No transactions found.";
+    const header = Object.keys(transactions[0]).join(",");
+    const rows = transactions.map((t) => Object.values(t).join(","));
+    return [header, ...rows].join("\n");
+  };
 
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showExportSubPanel, setShowExportSubPanel] = useState(false);
@@ -77,7 +89,10 @@ export default function SettingsScreen() {
       "log-out-outline",
       true,
       async () => {
-        await logout();
+        const { clearAuth } = await import("../redux/slices/authSlice");
+        const { supabase } = await import("../services/supabase");
+        dispatch(clearAuth());
+        await supabase.auth.signOut();
       },
       themeColors.expense,
       themeColors.softExpense,
@@ -140,8 +155,8 @@ export default function SettingsScreen() {
 
   const handleAboutApp = () => {
     showAlert(
-      "About Expense Tracker",
-      "Version 1.0.0\n\nA minimal, fast, and modern expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• 4-Digit Security PIN & Username Auth\n• System Dark & Light Theme Support\n• Data Export (JSON/CSV)",
+      "Expense Tracker v2.0.0",
+      "A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• Redux Toolkit & Offline Persistence\n• Supabase Cloud Sync & Google OAuth Sign-In\n• Dynamic SVG Analytics (Bar & Donut Charts)\n• 4-Digit Security PIN Protection\n• System Dark & Light Theme Support\n• Custom Date Range Data Export (JSON/CSV)",
       "information-circle-outline",
       false,
       () => {},
@@ -285,6 +300,7 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={themeColors.muted} />
           </TouchableOpacity>
+
         </View>
 
         {/* 4. Logout Section */}

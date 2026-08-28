@@ -1,5 +1,5 @@
 import React from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DashboardScreen from "../screens/DashboardScreen";
@@ -8,6 +8,7 @@ import AnalyticsScreen from "../screens/AnalyticsScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import CategoriesScreen from "../screens/CategoriesScreen";
 import { useTheme } from "../context/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const Tab = createBottomTabNavigator();
 
@@ -18,6 +19,7 @@ function DummyAddScreen() {
 
 export default function MainTabs({ navigation }: any) {
   const { themeColors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -26,19 +28,25 @@ export default function MainTabs({ navigation }: any) {
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.muted,
         tabBarStyle: {
-          height: 64,
-          borderTopColor: themeColors.border,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          borderTopWidth: 0,
+          borderTopColor: "transparent",
           backgroundColor: themeColors.card,
-          elevation: 8,
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: -3 },
+          elevation: 0,
+          shadowOpacity: 0,
+          shadowColor: "transparent",
+          minHeight: 64 + (insets.bottom > 0 ? 0 : 8), // Give a little extra if no gestures
+        },
+        tabBarItemStyle: {
+          paddingVertical: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "700",
-          marginBottom: 6,
+          marginBottom: insets.bottom > 0 ? 0 : 6,
         },
         tabBarIcon: ({ color, size }) => {
           const iconMap: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -90,7 +98,7 @@ export default function MainTabs({ navigation }: any) {
 
 const styles = StyleSheet.create({
   floatingButtonContainer: {
-    top: -16,
+    top: -20,
     justifyContent: "center",
     alignItems: "center",
   },

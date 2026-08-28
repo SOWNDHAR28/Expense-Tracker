@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector } from "../redux/hooks";
 import { useTheme } from "../context/ThemeContext";
 import ExpenseCard from "../components/ExpenseCard";
 
@@ -18,7 +18,7 @@ type FilterRange = "All" | "Today" | "Month" | "Year";
 export default function CategorySummaryScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { transactions } = useTransactions();
+  const transactions = useAppSelector((state) => state.transactions.items);
   const { themeColors } = useTheme();
 
   const categoryName = route.params?.categoryName || "Category";

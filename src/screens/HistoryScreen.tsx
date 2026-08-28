@@ -9,10 +9,12 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Platform,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector, useAppDispatch } from "../redux/hooks";
+import { fetchTransactions } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
 import { Transaction } from "../types/expense";
 import ExpenseCard from "../components/ExpenseCard";
@@ -21,7 +23,9 @@ type FilterTab = "All" | "Income" | "Expense";
 type SortOption = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
 
 export default function HistoryScreen() {
-  const { transactions } = useTransactions();
+  const transactions = useAppSelector((state) => state.transactions.items);
+  const loading = useAppSelector((state) => state.transactions.loading);
+  const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
 
   const [query, setQuery] = useState("");
@@ -103,9 +107,24 @@ export default function HistoryScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    await dispatch(fetchTransactions());
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.container} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={loading} 
+            onRefresh={onRefresh}
+            tintColor={themeColors.primary}
+            colors={[themeColors.primary]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: themeColors.text }]}>History</Text>
@@ -274,7 +293,7 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  container: { padding: 18, paddingBottom: 40 },
+  container: { padding: 18, paddingBottom: 100 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

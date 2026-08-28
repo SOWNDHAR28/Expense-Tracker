@@ -13,7 +13,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector, useAppDispatch } from "../redux/hooks";
+import { addPaymentMethod, removePaymentMethod } from "../redux/slices/paymentSlice";
+import { incomeCategories, expenseCategories } from "../constants/categories";
 import { useTheme } from "../context/ThemeContext";
 import CustomAlertModal from "../components/CustomAlertModal";
 
@@ -48,17 +50,20 @@ const PALETTE_ICONS = [
 
 export default function CategoriesScreen() {
   const navigation = useNavigation<any>();
-  const {
-    transactions,
-    expenseTotal,
-    incomeTotal,
-    expenseCategories,
-    incomeCategories,
-    addCustomCategory,
-  } = useTransactions();
+  const dispatch = useAppDispatch();
+  const transactions = useAppSelector((state) => state.transactions.items);
+  const paymentMethods = useAppSelector((state) => state.payments.items);
+  
+  const expenseTotal = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((sum, t) => sum + t.amount, 0);
+    
+  const incomeTotal = transactions
+    .filter((t) => t.type === "income")
+    .reduce((sum, t) => sum + t.amount, 0);
   const { themeColors } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<"expense" | "income">("expense");
+  const [activeTab, setActiveTab] = useState<"expense" | "income" | "payment">("expense");
 
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -144,6 +149,35 @@ export default function CategoriesScreen() {
       return;
     }
 
+    if (activeTab === "payment") {
+      const duplicate = paymentMethods.some(
+        (c) => c.label.toLowerCase() === cleanName.toLowerCase()
+      );
+      if (duplicate) {
+        showAlert(
+          "Duplicate",
+          "A payment method with this name already exists.",
+          "alert-circle-outline",
+          false,
+          () => {},
+          themeColors.expense,
+          themeColors.softExpense
+        );
+        return;
+      }
+      const nextId = `custom_pm_${cleanName.toLowerCase().replace(/\s+/g, "_")}`;
+      dispatch(addPaymentMethod({
+        id: nextId,
+        label: cleanName,
+        icon: newCatIcon,
+        color: newCatColor,
+        isDefault: false,
+      }));
+      setShowAddModal(false);
+      setNewCatName("");
+      return;
+    }
+
     // Check if category name already exists
     const duplicate = targetCategories.some(
       (c) => c.label.toLowerCase() === cleanName.toLowerCase()
@@ -170,15 +204,14 @@ export default function CategoriesScreen() {
       type: activeTab,
     };
 
-    await addCustomCategory(newCat);
     showAlert(
-      "Success",
-      `Category "${cleanName}" created successfully!`,
-      "checkmark-circle-outline",
+      "Coming Soon",
+      "Custom categories with cloud sync will be available in a future update.",
+      "information-circle-outline",
       false,
       () => {},
-      themeColors.income,
-      themeColors.softIncome
+      themeColors.primary,
+      themeColors.softPurple
     );
     setShowAddModal(false);
     setNewCatName("");
@@ -230,35 +263,74 @@ export default function CategoriesScreen() {
               Income
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              activeTab === "payment" && { backgroundColor: themeColors.card },
+            ]}
+            onPress={() => setActiveTab("payment")}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: activeTab === "payment" ? themeColors.primary : themeColors.muted },
+              ]}
+            >
+              Mode
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Categories List */}
         <View style={styles.cardList}>
-          {categoriesWithTotals.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.categoryRow, { borderBottomColor: themeColors.border }]}
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate("CategorySummary", { categoryName: item.label })}
-            >
-              <View style={styles.rowLeft}>
-                <View style={[styles.iconBox, { backgroundColor: `${item.color}1E` }]}>
-                  <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+          {activeTab === "payment" ? (
+            paymentMethods.map((item) => (
+              <View
+                key={item.id}
+                style={[styles.categoryRow, { borderBottomColor: themeColors.border }]}
+              >
+                <View style={styles.rowLeft}>
+                  <View style={[styles.iconBox, { backgroundColor: `${item.color}1E` }]}>
+                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+                  </View>
+                  <Text style={[styles.categoryName, { color: themeColors.text }]}>{item.label}</Text>
                 </View>
-                <Text style={[styles.categoryName, { color: themeColors.text }]}>{item.label}</Text>
+                <View style={styles.rowRight}>
+                  {!item.isDefault && (
+                    <TouchableOpacity onPress={() => dispatch(removePaymentMethod(item.id))}>
+                      <Ionicons name="trash-outline" size={20} color={themeColors.expense} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-              <View style={styles.rowRight}>
-                <Text style={[styles.categoryAmount, { color: themeColors.text }]}>
-                  ₹{item.total.toLocaleString("en-IN")}
-                </Text>
-                <Text style={[styles.categoryPercentage, { color: themeColors.muted }]}>
-                  {item.percentage}%
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+            ))
+          ) : (
+            categoriesWithTotals.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.categoryRow, { borderBottomColor: themeColors.border }]}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate("CategorySummary", { categoryName: item.label })}
+              >
+                <View style={styles.rowLeft}>
+                  <View style={[styles.iconBox, { backgroundColor: `${item.color}1E` }]}>
+                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+                  </View>
+                  <Text style={[styles.categoryName, { color: themeColors.text }]}>{item.label}</Text>
+                </View>
+                <View style={styles.rowRight}>
+                  <Text style={[styles.categoryAmount, { color: themeColors.text }]}>
+                    ₹{item.total.toLocaleString("en-IN")}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: themeColors.muted }]}>
+                    {item.percentage}%
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -275,7 +347,7 @@ export default function CategoriesScreen() {
               <View style={[styles.modalContent, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: themeColors.text }]}>
-                    New {activeTab === "expense" ? "Expense" : "Income"} Category
+                    New {activeTab === "expense" ? "Expense" : activeTab === "income" ? "Income" : "Payment"} {activeTab === "payment" ? "Method" : "Category"}
                   </Text>
                   <TouchableOpacity onPress={() => setShowAddModal(false)}>
                     <Ionicons name="close" size={24} color={themeColors.text} />
@@ -283,7 +355,7 @@ export default function CategoriesScreen() {
                 </View>
 
                 {/* Category Name Input */}
-                <Text style={[styles.inputLabel, { color: themeColors.text }]}>Category Name</Text>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>{activeTab === "payment" ? "Method Name" : "Category Name"}</Text>
                 <TextInput
                   style={[styles.textInput, { backgroundColor: themeColors.surface, color: themeColors.text, borderColor: themeColors.border }]}
                   placeholder="E.g. Gym, Subscriptions"

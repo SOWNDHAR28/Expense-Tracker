@@ -12,13 +12,17 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from "react-native";
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppDispatch, useAppSelector } from "../redux/hooks";
+import { addTransaction, updateTransaction } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
+import { incomeCategories } from "../constants/categories";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomAlertModal from "../components/CustomAlertModal";
+import * as Crypto from "expo-crypto";
 
 const { width } = Dimensions.get("window");
 
@@ -28,15 +32,21 @@ export default function AddIncomeScreen() {
   const transaction = route.params?.transaction;
   const isEditing = !!transaction;
 
-  const { addTransaction, updateTransaction, incomeCategories } = useTransactions();
+  const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
 
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : "");
-  const [selectedSource, setSelectedSource] = useState(
+  const [selectedCategory, setSelectedCategory] = useState(
     transaction ? transaction.category : (incomeCategories.length > 0 ? incomeCategories[0].label : "Salary")
   );
+  
+  const paymentMethods = useAppSelector(state => state.payments.items);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
+    transaction?.paymentMethod || "Cash"
+  );
+  
   const [date, setDate] = useState(transaction ? new Date(transaction.date) : new Date());
   const [note, setNote] = useState(transaction ? (transaction.note || "") : "");
 
@@ -150,12 +160,15 @@ export default function AddIncomeScreen() {
     setIsSaving(true);
     try {
       if (isEditing) {
-        await updateTransaction(transaction.id, {
-          amount: String(numericAmount),
-          category: selectedSource,
+        await dispatch(updateTransaction({
+          ...transaction,
+          amount: numericAmount,
+          category: selectedCategory,
+          paymentMethod: selectedPaymentMethod,
           note: note.trim(),
           date: date.toISOString(),
-        });
+          updatedAt: new Date().toISOString(),
+        })).unwrap();
         showAlert(
           "Income Updated",
           "Income transaction updated successfully!",
@@ -168,14 +181,17 @@ export default function AddIncomeScreen() {
           themeColors.softIncome
         );
       } else {
-        await addTransaction({
+        await dispatch(addTransaction({
+          id: Crypto.randomUUID(),
           type: "income",
-          amount: String(numericAmount),
-          category: selectedSource,
+          amount: numericAmount,
+          category: selectedCategory,
           note: note.trim(),
           date: date.toISOString(),
-          paymentMethod: "Bank Transfer",
-        });
+          paymentMethod: selectedPaymentMethod,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })).unwrap();
         showAlert(
           "Income Saved",
           "Income transaction added successfully!",
@@ -191,7 +207,7 @@ export default function AddIncomeScreen() {
     } catch (err: any) {
       showAlert(
         "Save Failed",
-        err.message || "Something went wrong.",
+        typeof err === 'string' ? err : (err?.message || "Something went wrong."),
         "alert-circle-outline",
         false,
         () => {},
@@ -226,10 +242,6 @@ export default function AddIncomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
@@ -247,7 +259,14 @@ export default function AddIncomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={styles.container} 
+          showsVerticalScrollIndicator={false}
+          enableOnAndroid={true}
+          keyboardShouldPersistTaps="handled"
+          extraScrollHeight={Platform.OS === 'ios' ? 20 : 20}
+        >
           {/* Amount Input */}
           <Text style={[styles.label, { color: themeColors.text }]}>Amount</Text>
           <View style={[styles.amountContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
@@ -266,7 +285,7 @@ export default function AddIncomeScreen() {
           <Text style={[styles.label, { color: themeColors.text }]}>Source</Text>
           <View style={styles.grid}>
             {incomeCategories.map((item) => {
-              const selected = selectedSource.toLowerCase() === item.label.toLowerCase();
+              const selected = selectedCategory.toLowerCase() === item.label.toLowerCase();
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -278,7 +297,42 @@ export default function AddIncomeScreen() {
                       borderWidth: selected ? 2 : 1,
                     },
                   ]}
-                  onPress={() => setSelectedSource(item.label)}
+                  onPress={() => setSelectedCategory(item.label)}
+                >
+                  <View style={[styles.gridIconWrap, { backgroundColor: `${item.color}22` }]}>
+                    <MaterialCommunityIcons name={item.icon as any} size={18} color={item.color} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.gridLabel,
+                      { color: selected ? themeColors.income : themeColors.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Payment Method Selection Grid */}
+          <Text style={[styles.label, { color: themeColors.text }]}>Payment Method</Text>
+          <View style={styles.grid}>
+            {paymentMethods.map((item) => {
+              const selected = selectedPaymentMethod.toLowerCase() === item.label.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.gridCard,
+                    {
+                      backgroundColor: selected ? themeColors.softIncome : themeColors.card,
+                      borderColor: selected ? themeColors.income : themeColors.border,
+                      borderWidth: selected ? 2 : 1,
+                    },
+                  ]}
+                  onPress={() => setSelectedPaymentMethod(item.label)}
                 >
                   <View style={[styles.gridIconWrap, { backgroundColor: `${item.color}22` }]}>
                     <MaterialCommunityIcons name={item.icon as any} size={18} color={item.color} />
@@ -345,8 +399,7 @@ export default function AddIncomeScreen() {
           >
             <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
 
       {/* Custom Styled Premium Calendar Modal */}
       <Modal

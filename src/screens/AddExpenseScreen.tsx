@@ -12,13 +12,17 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from "react-native";
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppDispatch, useAppSelector } from "../redux/hooks";
+import { addTransaction, updateTransaction } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
+import { expenseCategories } from "../constants/categories";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomAlertModal from "../components/CustomAlertModal";
+import * as Crypto from "expo-crypto"; // To generate UUIDs for local items
 
 const { width } = Dimensions.get("window");
 
@@ -28,7 +32,7 @@ export default function AddExpenseScreen() {
   const transaction = route.params?.transaction;
   const isEditing = !!transaction;
 
-  const { addTransaction, updateTransaction, expenseCategories } = useTransactions();
+  const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
 
   const isSavingRef = useRef(false);
@@ -37,6 +41,12 @@ export default function AddExpenseScreen() {
   const [selectedCategory, setSelectedCategory] = useState(
     transaction ? transaction.category : (expenseCategories.length > 0 ? expenseCategories[0].label : "Food")
   );
+  
+  const paymentMethods = useAppSelector(state => state.payments.items);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
+    transaction?.paymentMethod || "Cash"
+  );
+  
   const [date, setDate] = useState(transaction ? new Date(transaction.date) : new Date());
   const [note, setNote] = useState(transaction ? (transaction.note || "") : "");
 
@@ -150,12 +160,15 @@ export default function AddExpenseScreen() {
     setIsSaving(true);
     try {
       if (isEditing) {
-        await updateTransaction(transaction.id, {
-          amount: String(numericAmount),
+        await dispatch(updateTransaction({
+          ...transaction,
+          amount: numericAmount,
           category: selectedCategory,
+          paymentMethod: selectedPaymentMethod,
           note: note.trim(),
           date: date.toISOString(),
-        });
+          updatedAt: new Date().toISOString(),
+        })).unwrap();
         showAlert(
           "Expense Updated",
           "Expense transaction updated successfully!",
@@ -168,14 +181,17 @@ export default function AddExpenseScreen() {
           themeColors.softIncome
         );
       } else {
-        await addTransaction({
+        await dispatch(addTransaction({
+          id: Crypto.randomUUID(),
           type: "expense",
-          amount: String(numericAmount),
+          amount: numericAmount,
           category: selectedCategory,
           note: note.trim(),
           date: date.toISOString(),
-          paymentMethod: "Cash",
-        });
+          paymentMethod: selectedPaymentMethod,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })).unwrap();
         showAlert(
           "Expense Saved",
           "Expense transaction added successfully!",
@@ -191,7 +207,7 @@ export default function AddExpenseScreen() {
     } catch (err: any) {
       showAlert(
         "Save Failed",
-        err.message || "Something went wrong.",
+        typeof err === 'string' ? err : (err?.message || "Something went wrong."),
         "alert-circle-outline",
         false,
         () => {},
@@ -226,10 +242,6 @@ export default function AddExpenseScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
@@ -247,7 +259,14 @@ export default function AddExpenseScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={styles.container} 
+          showsVerticalScrollIndicator={false}
+          enableOnAndroid={true}
+          keyboardShouldPersistTaps="handled"
+          extraScrollHeight={Platform.OS === 'ios' ? 20 : 20}
+        >
           {/* Amount Input */}
           <Text style={[styles.label, { color: themeColors.text }]}>Amount</Text>
           <View style={[styles.amountContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
@@ -279,6 +298,41 @@ export default function AddExpenseScreen() {
                     },
                   ]}
                   onPress={() => setSelectedCategory(item.label)}
+                >
+                  <View style={[styles.gridIconWrap, { backgroundColor: `${item.color}22` }]}>
+                    <MaterialCommunityIcons name={item.icon as any} size={18} color={item.color} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.gridLabel,
+                      { color: selected ? themeColors.expense : themeColors.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Payment Method Selection Grid */}
+          <Text style={[styles.label, { color: themeColors.text }]}>Payment Method</Text>
+          <View style={styles.grid}>
+            {paymentMethods.map((item) => {
+              const selected = selectedPaymentMethod.toLowerCase() === item.label.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.gridCard,
+                    {
+                      backgroundColor: selected ? themeColors.softExpense : themeColors.card,
+                      borderColor: selected ? themeColors.expense : themeColors.border,
+                      borderWidth: selected ? 2 : 1,
+                    },
+                  ]}
+                  onPress={() => setSelectedPaymentMethod(item.label)}
                 >
                   <View style={[styles.gridIconWrap, { backgroundColor: `${item.color}22` }]}>
                     <MaterialCommunityIcons name={item.icon as any} size={18} color={item.color} />
@@ -345,8 +399,7 @@ export default function AddExpenseScreen() {
           >
             <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
 
       {/* Custom Styled Premium Calendar Modal */}
       <Modal

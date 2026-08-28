@@ -11,14 +11,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useTransactions } from "../context/TransactionContext";
+import { useAppSelector } from "../redux/hooks";
+import { incomeCategories, expenseCategories } from "../constants/categories";
 import { useTheme } from "../context/ThemeContext";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Rect, Line, Text as SvgText, G } from "react-native-svg";
 
 type TimeRange = "Week" | "Month" | "Year";
 
 export default function AnalyticsScreen() {
-  const { transactions, incomeCategories, expenseCategories } = useTransactions();
+  const transactions = useAppSelector((state) => state.transactions.items);
   const { themeColors } = useTheme();
 
   const [timeRange, setTimeRange] = useState<TimeRange>("Month");
@@ -119,6 +120,62 @@ export default function AnalyticsScreen() {
 
   const breakdownToDisplay = categoryBreakdown;
   const activeTotalValue = targetTotal;
+
+  // --- Bar Chart Data Processing ---
+  const barChartData = useMemo(() => {
+    // Only use filteredTransactions to ensure date filters apply
+    const data = filteredTransactions.filter((t) => t.type === activeChartType);
+    
+    let buckets: { label: string; amount: number }[] = [];
+
+    if (timeRange === "Week") {
+      // 7 Days
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      buckets = days.map((d) => ({ label: d, amount: 0 }));
+      
+      data.forEach((t) => {
+        const d = new Date(t.date);
+        let dayIdx = d.getDay() - 1; // 0 is Sunday, we want Mon=0
+        if (dayIdx === -1) dayIdx = 6;
+        if (dayIdx >= 0 && dayIdx < 7) {
+          buckets[dayIdx].amount += t.amount;
+        }
+      });
+    } else if (timeRange === "Month") {
+      // 4-5 Weeks
+      const daysInM = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 0).getDate();
+      const weeks = Math.ceil(daysInM / 7);
+      for (let i = 1; i <= weeks; i++) {
+        buckets.push({ label: `W${i}`, amount: 0 });
+      }
+      
+      data.forEach((t) => {
+        const d = new Date(t.date);
+        const day = d.getDate();
+        const weekIdx = Math.floor((day - 1) / 7);
+        if (weekIdx >= 0 && weekIdx < buckets.length) {
+          buckets[weekIdx].amount += t.amount;
+        }
+      });
+    } else if (timeRange === "Year") {
+      // 12 Months
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      buckets = months.map((m) => ({ label: m, amount: 0 }));
+      
+      data.forEach((t) => {
+        const d = new Date(t.date);
+        const mIdx = d.getMonth();
+        if (mIdx >= 0 && mIdx < 12) {
+          buckets[mIdx].amount += t.amount;
+        }
+      });
+    }
+
+    return buckets;
+  }, [filteredTransactions, activeChartType, timeRange, selectedMonthDate]);
+
+  const maxChartAmount = Math.max(...barChartData.map((b) => b.amount), 100);
+
 
   // SVG Segmented Donut dimensions
   const radius = 70;
@@ -357,8 +414,134 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* --- Spending Trends Bar Chart --- */}
+        <Text style={[styles.sectionTitle, { color: themeColors.text, marginBottom: 12, marginTop: 8 }]}>
+          {activeChartType === "expense" ? "Expense" : "Income"} Trends
+        </Text>
         <View style={[styles.chartCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-          
+          {barChartData.reduce((sum, b) => sum + b.amount, 0) === 0 ? (
+            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: themeColors.muted }}>
+                No trend data for this period
+              </Text>
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", justifyContent: "center", marginTop: 10 }}>
+              <Svg width="100%" height={180} viewBox="0 0 320 180">
+                {/* Horizontal Grid Lines */}
+                {[0, 0.5, 1].map((ratio) => (
+                  <Line
+                    key={ratio}
+                    x1="0"
+                    y1={150 - ratio * 130}
+                    x2="320"
+                    y2={150 - ratio * 130}
+                    stroke={themeColors.border}
+                    strokeWidth="1"
+                    strokeDasharray="4, 4"
+                  />
+                ))}
+
+                {/* Y-axis Labels */}
+                {[0, 0.5, 1].map((ratio) => {
+                  const val = maxChartAmount * ratio;
+                  const label = val >= 1000 ? `${(val / 1000).toFixed(1)}k` : Math.round(val).toString();
+                  return (
+                    <SvgText
+                      key={`y-${ratio}`}
+                      x="0"
+                      y={150 - ratio * 130 - 4}
+                      fill={themeColors.muted}
+                      fontSize="10"
+                      fontWeight="600"
+                    >
+                      {label}
+                    </SvgText>
+                  );
+                })}
+
+                {/* Bars */}
+                {barChartData.map((item, index) => {
+                  const barWidth = Math.min(24, 300 / barChartData.length - 8);
+                  const spacing = 320 / barChartData.length;
+                  const x = index * spacing + spacing / 2;
+                  const barHeight = (item.amount / maxChartAmount) * 130; // Max height 130px
+                  
+                  return (
+                    <G key={index}>
+                      <Rect
+                        x={x - barWidth / 2}
+                        y={150 - barHeight}
+                        width={barWidth}
+                        height={barHeight}
+                        fill={activeChartType === "expense" ? themeColors.expense : themeColors.income}
+                        rx={barWidth / 2} // Rounded tops and bottoms
+                        ry={barWidth / 2}
+                      />
+                      {/* X-axis Labels */}
+                      <SvgText
+                        x={x}
+                        y={170}
+                        fill={themeColors.muted}
+                        fontSize="11"
+                        fontWeight="600"
+                        textAnchor="middle"
+                      >
+                        {item.label}
+                      </SvgText>
+                    </G>
+                  );
+                })}
+              </Svg>
+            </View>
+          )}
+        </View>
+
+        {/* Expense/Income by Category Section Header & Toggle Switch */}
+        <View style={styles.chartTitleRow}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text, marginBottom: 0 }]}>
+            {activeChartType === "expense" ? "Expenses" : "Income"} by Category
+          </Text>
+          <View style={[styles.toggleContainer, { backgroundColor: themeColors.surface }]}>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                activeChartType === "expense" && { backgroundColor: themeColors.card },
+              ]}
+              onPress={() => setActiveChartType("expense")}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: activeChartType === "expense" ? themeColors.primary : themeColors.muted },
+                ]}
+              >
+                Expenses
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                activeChartType === "income" && { backgroundColor: themeColors.card },
+              ]}
+              onPress={() => setActiveChartType("income")}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: activeChartType === "income" ? themeColors.primary : themeColors.muted },
+                ]}
+              >
+                Income
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={[styles.chartCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
           {/* Dynamic SVG Segmented Donut Chart */}
           <View style={styles.donutContainer}>
             <View style={styles.svgWrapper}>
@@ -528,7 +711,7 @@ export default function AnalyticsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  container: { padding: 18, paddingBottom: 40 },
+  container: { padding: 18, paddingBottom: 100 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
