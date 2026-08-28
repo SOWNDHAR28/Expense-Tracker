@@ -5,6 +5,7 @@ interface AuthState {
   session: any | null;
   isLoading: boolean;
   error: string | null;
+  deviceLockEnabled: boolean;
 }
 
 const initialState: AuthState = {
@@ -12,6 +13,7 @@ const initialState: AuthState = {
   session: null,
   isLoading: false,
   error: null,
+  deviceLockEnabled: false,
 };
 
 const authSlice = createSlice({
@@ -31,9 +33,12 @@ const authSlice = createSlice({
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+    },
+    setDeviceLockEnabled: (state, action: PayloadAction<boolean>) => {
+      state.deviceLockEnabled = action.payload;
     }
   },
 });
 
-export const { setAuth, clearAuth, setLoading, setError } = authSlice.actions;
+export const { setAuth, clearAuth, setLoading, setError, setDeviceLockEnabled } = authSlice.actions;
 export default authSlice.reducer;

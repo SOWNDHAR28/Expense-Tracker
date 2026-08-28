@@ -7,17 +7,21 @@ import {
   TouchableOpacity,
   Platform,
   Share,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme, ThemeMode } from "../context/ThemeContext";
 import { useAppSelector, useAppDispatch } from "../redux/hooks";
+import { setDeviceLockEnabled } from "../redux/slices/authSlice";
 import CustomAlertModal from "../components/CustomAlertModal";
+import * as LocalAuthentication from 'expo-local-authentication';
 
 export default function SettingsScreen() {
   const { themeMode, setThemeMode, themeColors } = useTheme();
   const transactions = useAppSelector((state) => state.transactions.items);
   const user = useAppSelector((state) => state.auth.user);
+  const deviceLockEnabled = useAppSelector((state) => state.auth.deviceLockEnabled);
   const username = user?.email?.split('@')[0] || "User";
   const dispatch = useAppDispatch();
 
@@ -156,13 +160,65 @@ export default function SettingsScreen() {
   const handleAboutApp = () => {
     showAlert(
       "Expense Tracker v2.0.0",
-      "A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• Redux Toolkit & Offline Persistence\n• Supabase Cloud Sync & Google OAuth Sign-In\n• Dynamic SVG Analytics (Bar & Donut Charts)\n• 4-Digit Security PIN Protection\n• System Dark & Light Theme Support\n• Custom Date Range Data Export (JSON/CSV)",
+      "A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• Redux Toolkit & Offline Persistence\n• Supabase Cloud Sync & Google OAuth Sign-In\n• Dynamic SVG Analytics (Bar & Donut Charts)\n• Native App Lock (Biometrics/PIN)\n• System Dark & Light Theme Support\n• Custom Date Range Data Export (JSON/CSV)",
       "information-circle-outline",
       false,
       () => {},
       themeColors.primary,
       themeColors.softPurple
     );
+  };
+
+  const handleToggleDeviceLock = async (value: boolean) => {
+    if (value) {
+      // Trying to turn ON
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        showAlert(
+          "Biometrics Unavailable",
+          "Your device does not support or have biometrics/passcode enrolled. Please set up a device lock in your phone settings first.",
+          "warning-outline",
+          false,
+          () => {},
+          themeColors.expense,
+          themeColors.softExpense
+        );
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Authenticate to enable App Lock",
+        fallbackLabel: "Use Passcode",
+      });
+
+      if (result.success) {
+        dispatch(setDeviceLockEnabled(true));
+        showAlert(
+          "App Lock Enabled",
+          "Your app is now protected by your device's native lock (Face ID/Fingerprint/Passcode).",
+          "lock-closed-outline",
+          false,
+          () => {},
+          themeColors.income,
+          themeColors.softIncome
+        );
+      } else {
+        showAlert(
+          "Authentication Failed",
+          "Failed to verify your identity. App Lock was not enabled.",
+          "close-circle-outline",
+          false,
+          () => {},
+          themeColors.expense,
+          themeColors.softExpense
+        );
+      }
+    } else {
+      // Turn OFF
+      dispatch(setDeviceLockEnabled(false));
+    }
   };
 
   const themeLabel =
@@ -183,8 +239,8 @@ export default function SettingsScreen() {
             <Text style={[styles.userName, { color: themeColors.text }]}>
               {username || "User"}
             </Text>
-            <Text style={[styles.userBadge, { color: themeColors.muted }]}>
-              4-digit PIN Protection Active
+            <Text style={[styles.userBadge, { color: deviceLockEnabled ? themeColors.primary : themeColors.muted }]}>
+              {deviceLockEnabled ? "🔒 App Lock Active" : "🔓 App Lock Disabled"}
             </Text>
           </View>
         </View>
@@ -301,9 +357,25 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={18} color={themeColors.muted} />
           </TouchableOpacity>
 
+          {/* 4. App Lock Toggle */}
+          <View style={[styles.menuItem, { borderTopColor: themeColors.border, borderTopWidth: 1 }]}>
+            <View style={styles.itemLeft}>
+              <View style={[styles.itemIcon, { backgroundColor: themeColors.softIncome }]}>
+                <Ionicons name="lock-closed-outline" size={20} color={themeColors.income} />
+              </View>
+              <Text style={[styles.itemText, { color: themeColors.text }]}>App Lock</Text>
+            </View>
+            <Switch
+              value={deviceLockEnabled}
+              onValueChange={handleToggleDeviceLock}
+              trackColor={{ false: themeColors.border, true: themeColors.primary }}
+              thumbColor={"#ffffff"}
+            />
+          </View>
+
         </View>
 
-        {/* 4. Logout Section */}
+        {/* 5. Logout Section */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: themeColors.softExpense, borderColor: themeColors.expense + "33" }]}
           onPress={handleLogout}
