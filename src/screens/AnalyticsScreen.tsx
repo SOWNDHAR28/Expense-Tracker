@@ -10,11 +10,11 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAppSelector } from "../redux/hooks";
 import { incomeCategories, expenseCategories } from "../constants/categories";
 import { useTheme } from "../context/ThemeContext";
-import Svg, { Circle, Rect, Line, Text as SvgText, G } from "react-native-svg";
+import Svg, { Circle, Rect, Line, Text as SvgText, G, Path, Defs, LinearGradient, Stop } from "react-native-svg";
 
 type TimeRange = "Week" | "Month" | "Year";
 
@@ -461,38 +461,74 @@ export default function AnalyticsScreen() {
                   );
                 })}
 
-                {/* Bars */}
-                {barChartData.map((item, index) => {
-                  const barWidth = Math.min(24, 300 / barChartData.length - 8);
+                {/* Gradient Definition */}
+                <Defs>
+                  <LinearGradient id="gradientFill" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor={activeChartType === "expense" ? themeColors.expense : themeColors.income} stopOpacity="0.4" />
+                    <Stop offset="100%" stopColor={activeChartType === "expense" ? themeColors.expense : themeColors.income} stopOpacity="0.0" />
+                  </LinearGradient>
+                </Defs>
+
+                {/* Smooth Bezier Line & Gradient Fill */}
+                {(() => {
                   const spacing = 320 / barChartData.length;
-                  const x = index * spacing + spacing / 2;
-                  const barHeight = (item.amount / maxChartAmount) * 130; // Max height 130px
-                  
+                  const points = barChartData.map((item, index) => {
+                    const x = index * spacing + spacing / 2;
+                    const barHeight = (item.amount / maxChartAmount) * 130; 
+                    const y = 150 - barHeight;
+                    return { x, y, label: item.label };
+                  });
+
+                  if (points.length === 0) return null;
+
+                  let pathD = `M ${points[0].x} ${points[0].y}`;
+                  for (let i = 1; i < points.length; i++) {
+                    const prev = points[i - 1];
+                    const curr = points[i];
+                    // Control points for a smooth monotone curve
+                    const cpX = (prev.x + curr.x) / 2;
+                    pathD += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+                  }
+
+                  const fillPathD = `${pathD} L ${points[points.length - 1].x} 150 L ${points[0].x} 150 Z`;
+
                   return (
-                    <G key={index}>
-                      <Rect
-                        x={x - barWidth / 2}
-                        y={150 - barHeight}
-                        width={barWidth}
-                        height={barHeight}
-                        fill={activeChartType === "expense" ? themeColors.expense : themeColors.income}
-                        rx={barWidth / 2} // Rounded tops and bottoms
-                        ry={barWidth / 2}
+                    <G>
+                      <Path d={fillPathD} fill="url(#gradientFill)" />
+                      <Path 
+                        d={pathD} 
+                        fill="none" 
+                        stroke={activeChartType === "expense" ? themeColors.expense : themeColors.income} 
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
-                      {/* X-axis Labels */}
-                      <SvgText
-                        x={x}
-                        y={170}
-                        fill={themeColors.muted}
-                        fontSize="11"
-                        fontWeight="600"
-                        textAnchor="middle"
-                      >
-                        {item.label}
-                      </SvgText>
+                      {/* Dots & Labels */}
+                      {points.map((p, i) => (
+                        <G key={i}>
+                          <Circle 
+                            cx={p.x} 
+                            cy={p.y} 
+                            r="4" 
+                            fill={themeColors.card} 
+                            stroke={activeChartType === "expense" ? themeColors.expense : themeColors.income} 
+                            strokeWidth="2" 
+                          />
+                          <SvgText
+                            x={p.x}
+                            y={170}
+                            fill={themeColors.muted}
+                            fontSize="11"
+                            fontWeight="600"
+                            textAnchor="middle"
+                          >
+                            {p.label}
+                          </SvgText>
+                        </G>
+                      ))}
                     </G>
                   );
-                })}
+                })()}
               </Svg>
             </View>
           )}

@@ -16,6 +16,9 @@ import { useAppSelector, useAppDispatch } from "../redux/hooks";
 import { setDeviceLockEnabled } from "../redux/slices/authSlice";
 import CustomAlertModal from "../components/CustomAlertModal";
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import AnimatedButton from '../components/AnimatedButton';
 
 export default function SettingsScreen() {
   const { themeMode, setThemeMode, themeColors } = useTheme();
@@ -248,10 +251,10 @@ export default function SettingsScreen() {
         {/* Settings Group */}
         <View style={[styles.menuList, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
           {/* 1. System Theme */}
-          <TouchableOpacity
+          <AnimatedButton
             style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
             onPress={() => setShowThemeModal(!showThemeModal)}
-            activeOpacity={0.7}
+            hapticFeedback="light"
           >
             <View style={styles.itemLeft}>
               <View style={[styles.itemIcon, { backgroundColor: themeColors.softPurple }]}>
@@ -265,7 +268,7 @@ export default function SettingsScreen() {
               </Text>
               <Ionicons name="chevron-forward" size={18} color={themeColors.muted} />
             </View>
-          </TouchableOpacity>
+          </AnimatedButton>
 
           {/* Theme Selector Sub-Panel */}
           {showThemeModal && (
@@ -300,10 +303,10 @@ export default function SettingsScreen() {
           )}
 
           {/* 2. Export Data */}
-          <TouchableOpacity
+          <AnimatedButton
             style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
             onPress={() => setShowExportSubPanel(!showExportSubPanel)}
-            activeOpacity={0.7}
+            hapticFeedback="light"
           >
             <View style={styles.itemLeft}>
               <View style={[styles.itemIcon, { backgroundColor: themeColors.softBlue }]}>
@@ -314,7 +317,7 @@ export default function SettingsScreen() {
             <View style={styles.itemRight}>
               <Ionicons name={showExportSubPanel ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.muted} />
             </View>
-          </TouchableOpacity>
+          </AnimatedButton>
 
           {/* Export Format Selector Sub-Panel */}
           {showExportSubPanel && (
@@ -343,10 +346,10 @@ export default function SettingsScreen() {
           )}
 
           {/* 3. About App */}
-          <TouchableOpacity
+          <AnimatedButton
             style={styles.menuItem}
             onPress={handleAboutApp}
-            activeOpacity={0.7}
+            hapticFeedback="light"
           >
             <View style={styles.itemLeft}>
               <View style={[styles.itemIcon, { backgroundColor: themeColors.softTeal }]}>
@@ -355,7 +358,7 @@ export default function SettingsScreen() {
               <Text style={[styles.itemText, { color: themeColors.text }]}>About App</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={themeColors.muted} />
-          </TouchableOpacity>
+          </AnimatedButton>
 
           {/* 4. App Lock Toggle */}
           <View style={[styles.menuItem, { borderTopColor: themeColors.border, borderTopWidth: 1 }]}>
@@ -376,14 +379,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* 5. Logout Section */}
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.logoutButton, { backgroundColor: themeColors.softExpense, borderColor: themeColors.expense + "33" }]}
           onPress={handleLogout}
-          activeOpacity={0.8}
+          hapticFeedback="light"
         >
           <MaterialCommunityIcons name="logout" size={20} color={themeColors.expense} style={{ marginRight: 8 }} />
           <Text style={[styles.logoutText, { color: themeColors.expense }]}>Logout</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
       </ScrollView>
 
       {/* Custom Alert Modal Popup */}

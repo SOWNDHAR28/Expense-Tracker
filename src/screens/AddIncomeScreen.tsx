@@ -11,6 +11,7 @@ import {
   Dimensions,
   Modal,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,10 +19,12 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { addTransaction, updateTransaction } from "../redux/slices/transactionSlice";
-import { useTheme } from "../context/ThemeContext";
-import { incomeCategories } from "../constants/categories";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { incomeCategories } from "../constants/categories";
+import { useTheme } from "../context/ThemeContext";
 import CustomAlertModal from "../components/CustomAlertModal";
+import AnimatedButton from "../components/AnimatedButton";
+import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 
 const { width } = Dimensions.get("window");
@@ -153,6 +156,7 @@ export default function AddIncomeScreen() {
         themeColors.expense,
         themeColors.softExpense
       );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
@@ -180,6 +184,7 @@ export default function AddIncomeScreen() {
           themeColors.income,
           themeColors.softIncome
         );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         await dispatch(addTransaction({
           id: Crypto.randomUUID(),
@@ -203,6 +208,7 @@ export default function AddIncomeScreen() {
           themeColors.income,
           themeColors.softIncome
         );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err: any) {
       showAlert(
@@ -214,6 +220,7 @@ export default function AddIncomeScreen() {
         themeColors.expense,
         themeColors.softExpense
       );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -244,19 +251,13 @@ export default function AddIncomeScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+          <AnimatedButton onPress={() => navigation.goBack()} style={styles.iconButton} hapticFeedback="light">
             <Ionicons name="chevron-back" size={24} color={themeColors.text} />
-          </TouchableOpacity>
+          </AnimatedButton>
           <Text style={[styles.title, { color: themeColors.text }]}>
             {isEditing ? "Edit Income" : "Add Income"}
           </Text>
-          <TouchableOpacity
-            onPress={handleSave}
-            style={[styles.iconButton, isSaving && { opacity: 0.5 }]}
-            disabled={isSaving}
-          >
-            <Ionicons name="checkmark" size={24} color={themeColors.primary} />
-          </TouchableOpacity>
+          <View style={{ width: 36 }} />
         </View>
 
         <KeyboardAwareScrollView 
@@ -281,7 +282,7 @@ export default function AddIncomeScreen() {
             />
           </View>
 
-          {/* Source Selection Grid - 3 items in a row */}
+          {/* Source Selection Grid */}
           <Text style={[styles.label, { color: themeColors.text }]}>Source</Text>
           <View style={styles.grid}>
             {incomeCategories.map((item) => {
@@ -368,7 +369,6 @@ export default function AddIncomeScreen() {
             <Ionicons name="chevron-down" size={18} color={themeColors.muted} />
           </TouchableOpacity>
 
-          {/* Platform Conditional Native TimePicker */}
           {showTimePicker && (
             <DateTimePicker
               value={date}
@@ -391,14 +391,24 @@ export default function AddIncomeScreen() {
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: themeColors.primary }, isSaving && { opacity: 0.7 }]}
+          <AnimatedButton
+            style={[
+              styles.saveButton, 
+              { backgroundColor: themeColors.primary, marginTop: 24 },
+              isSaving && { opacity: 0.7 }
+            ]}
             onPress={handleSave}
-            activeOpacity={0.8}
             disabled={isSaving}
+            hapticFeedback="light"
           >
-            <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
-          </TouchableOpacity>
+            {isSaving ? (
+              <ActivityIndicator color={themeColors.card} />
+            ) : (
+              <Text style={styles.saveButtonText}>
+                {isEditing ? "Save Changes" : "Save Income"}
+              </Text>
+            )}
+          </AnimatedButton>
         </KeyboardAwareScrollView>
 
       {/* Custom Styled Premium Calendar Modal */}

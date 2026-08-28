@@ -28,6 +28,8 @@ import { expenseCategories, incomeCategories } from "../constants/categories";
 import CustomAlertModal from "../components/CustomAlertModal";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as LocalAuthentication from 'expo-local-authentication';
+import { setDeviceLockEnabled } from '../redux/slices/authSlice';
 
 const { width } = Dimensions.get("window");
 
@@ -54,14 +56,63 @@ export default function DashboardScreen() {
   const netBalance = incomeTotal - expenseTotal;
 
   const { themeColors, isDark, themeMode, setThemeMode } = useTheme();
-  // Using a local state for deviceLockEnabled for now as it's not our primary focus
-  const [deviceLockEnabled, setDeviceLockEnabled] = useState(false);
+  
+  // Use Redux state for global App Lock
+  const deviceLockEnabled = useAppSelector(state => state.auth.deviceLockEnabled);
+  
   const navigation = useNavigation<any>();
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [editedUsername, setEditedUsername] = useState("");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+
+  // Dynamic Alert Config for Reusable Popup Modal
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon: string;
+    showCancel: boolean;
+    onConfirm: () => void;
+    iconColor?: string;
+    iconBg?: string;
+    confirmText?: string;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    icon: "alert-circle-outline",
+    showCancel: false,
+    onConfirm: () => {},
+    confirmText: "OK",
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    icon = "alert-circle-outline",
+    showCancel = false,
+    onConfirm = () => {},
+    iconColor?: string,
+    iconBg?: string,
+    confirmText = "OK"
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      icon,
+      showCancel,
+      onConfirm: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        onConfirm();
+      },
+      iconColor,
+      iconBg,
+      confirmText,
+    });
+  };
 
   // Data Export States
   const [showExportOptions, setShowExportOptions] = useState(false);
@@ -114,6 +165,75 @@ export default function DashboardScreen() {
     month: "long",
     year: "numeric",
   });
+
+  const handleToggleDeviceLock = async (value: boolean) => {
+    try {
+      if (value) {
+        const withTimeout = (promise: Promise<any>, ms = 3000) => {
+          return Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Biometric API Timeout")), ms))
+          ]);
+        };
+
+        const hasHardware = await withTimeout(LocalAuthentication.hasHardwareAsync());
+        const isEnrolled = await withTimeout(LocalAuthentication.isEnrolledAsync());
+
+        if (!hasHardware || !isEnrolled) {
+          showAlert(
+            "Biometrics Unavailable",
+            "Your device does not support or have biometrics/passcode enrolled. Please set up a device lock in your phone settings first.",
+            "warning-outline",
+            false,
+            () => {},
+            themeColors.expense,
+            themeColors.softExpense
+          );
+          return;
+        }
+
+        const result = await withTimeout(LocalAuthentication.authenticateAsync({
+          promptMessage: "Authenticate to enable App Lock",
+          fallbackLabel: "Use Passcode",
+        }), 15000);
+
+        if (result.success) {
+          dispatch(setDeviceLockEnabled(true));
+          showAlert(
+            "App Lock Enabled",
+            "Your app is now protected by your device's native lock.",
+            "lock-closed-outline",
+            false,
+            () => {},
+            themeColors.income,
+            themeColors.softIncome
+          );
+        } else {
+          showAlert(
+            "Authentication Failed",
+            "Failed to verify your identity.",
+            "close-circle-outline",
+            false,
+            () => {},
+            themeColors.expense,
+            themeColors.softExpense
+          );
+        }
+      } else {
+        dispatch(setDeviceLockEnabled(false));
+      }
+    } catch (error: any) {
+      showAlert(
+        "Lock Error",
+        `An unexpected error occurred: ${error.message || "Unknown error"}`,
+        "close-circle-outline",
+        false,
+        () => {},
+        themeColors.expense,
+        themeColors.softExpense
+      );
+    }
+  };
 
   const handleExportData = async () => {
     let startLimit = new Date();
@@ -656,9 +776,9 @@ export default function DashboardScreen() {
                 {/* About App Sub-Panel */}
                 {showAboutOptions && (
                   <View style={[styles.dropdownSubPanel, { backgroundColor: themeColors.surface, padding: 12 }]}>
-                    <Text style={[styles.aboutTitle, { color: themeColors.text }]}>Expense Tracker v1.0.0</Text>
+                    <Text style={[styles.aboutTitle, { color: themeColors.text }]}>Expense Tracker v2.0.0</Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted, marginTop: 6 }]}>
-                      A minimal, fast, and modern expense & income tracking application built with React Native and TypeScript.
+                      A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.
                     </Text>
                     <Text style={[styles.aboutSubtitle, { color: themeColors.text, marginTop: 10 }]}>Features:</Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
@@ -668,16 +788,19 @@ export default function DashboardScreen() {
                       • Redux Toolkit & Offline Persistence
                     </Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
-                      • Supabase Cloud Sync
+                      • Supabase Cloud Sync & Google OAuth Sign-In
                     </Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
-                      • 4-Digit Security PIN & Username Auth
+                      • Dynamic SVG Analytics (Bar & Donut Charts)
+                    </Text>
+                    <Text style={[styles.aboutText, { color: themeColors.muted }]}>
+                      • Native App Lock (Biometrics/PIN)
                     </Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
                       • System Dark & Light Theme Support
                     </Text>
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
-                      • Data Export (JSON/CSV)
+                      • Custom Date Range Data Export (JSON/CSV)
                     </Text>
                   </View>
                 )}
@@ -761,7 +884,11 @@ export default function DashboardScreen() {
                     </View>
                   )}
 
-                  <View style={[styles.securityBadge, { backgroundColor: themeColors.softPurple, marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: themeColors.border }]}>
+                  <TouchableOpacity 
+                    style={[styles.securityBadge, { backgroundColor: themeColors.softPurple, marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: themeColors.border }]}
+                    onPress={() => handleToggleDeviceLock(!deviceLockEnabled)}
+                    activeOpacity={0.8}
+                  >
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="lock-closed" size={16} color={themeColors.primary} style={{ marginRight: 6 }} />
                       <Text style={{ fontSize: 13, fontWeight: "700", color: themeColors.text }}>
@@ -769,12 +896,12 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                     <Switch
-                      value={deviceLockEnabled}
-                      onValueChange={setDeviceLockEnabled}
+                      value={!!deviceLockEnabled}
+                      onValueChange={handleToggleDeviceLock}
                       trackColor={{ false: themeColors.border, true: themeColors.primary }}
                       thumbColor={Platform.OS === "android" ? (deviceLockEnabled ? themeColors.card : "#f4f3f4") : undefined}
                     />
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
 
@@ -815,6 +942,20 @@ export default function DashboardScreen() {
         confirmColor={themeColors.primary}
         onCancel={() => setShowLogoutModal(false)}
         onConfirm={confirmLogout}
+      />
+
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        icon={alertConfig.icon as any}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        iconColor={alertConfig.iconColor || themeColors.primary}
+        iconBg={alertConfig.iconBg || themeColors.softPurple}
+        confirmColor={alertConfig.iconColor || themeColors.primary}
+        onCancel={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+        onConfirm={alertConfig.onConfirm}
       />
 
       {/* Custom Styled Premium Calendar Modal for Export Start/End dates */}

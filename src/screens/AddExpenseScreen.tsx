@@ -11,6 +11,7 @@ import {
   Dimensions,
   Modal,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +23,8 @@ import { useTheme } from "../context/ThemeContext";
 import { expenseCategories } from "../constants/categories";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomAlertModal from "../components/CustomAlertModal";
+import AnimatedButton from "../components/AnimatedButton";
+import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto"; // To generate UUIDs for local items
 
 const { width } = Dimensions.get("window");
@@ -153,6 +156,7 @@ export default function AddExpenseScreen() {
         themeColors.expense,
         themeColors.softExpense
       );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
@@ -180,6 +184,7 @@ export default function AddExpenseScreen() {
           themeColors.income,
           themeColors.softIncome
         );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         await dispatch(addTransaction({
           id: Crypto.randomUUID(),
@@ -203,6 +208,7 @@ export default function AddExpenseScreen() {
           themeColors.income,
           themeColors.softIncome
         );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err: any) {
       showAlert(
@@ -214,6 +220,7 @@ export default function AddExpenseScreen() {
         themeColors.expense,
         themeColors.softExpense
       );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -244,19 +251,20 @@ export default function AddExpenseScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+          <AnimatedButton onPress={() => navigation.goBack()} style={styles.iconButton} hapticFeedback="light">
             <Ionicons name="chevron-back" size={24} color={themeColors.text} />
-          </TouchableOpacity>
+          </AnimatedButton>
           <Text style={[styles.title, { color: themeColors.text }]}>
             {isEditing ? "Edit Expense" : "Add Expense"}
           </Text>
-          <TouchableOpacity
+          <AnimatedButton
             onPress={handleSave}
             style={[styles.iconButton, isSaving && { opacity: 0.5 }]}
             disabled={isSaving}
+            hapticFeedback="light"
           >
             <Ionicons name="checkmark" size={24} color={themeColors.primary} />
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
 
         <KeyboardAwareScrollView 
@@ -391,14 +399,24 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: themeColors.primary }, isSaving && { opacity: 0.7 }]}
+          <AnimatedButton
+            style={[
+              styles.saveButton, 
+              { backgroundColor: themeColors.primary, marginTop: 12 },
+              isSaving && { opacity: 0.7 }
+            ]}
             onPress={handleSave}
-            activeOpacity={0.8}
             disabled={isSaving}
+            hapticFeedback="light"
           >
-            <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save"}</Text>
-          </TouchableOpacity>
+            {isSaving ? (
+              <ActivityIndicator color={themeColors.card} />
+            ) : (
+              <Text style={[styles.saveButtonText, { color: themeColors.card }]}>
+                {isEditing ? "Save Changes" : "Save Expense"}
+              </Text>
+            )}
+          </AnimatedButton>
         </KeyboardAwareScrollView>
 
       {/* Custom Styled Premium Calendar Modal */}

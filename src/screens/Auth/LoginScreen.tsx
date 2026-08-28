@@ -3,11 +3,13 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { useAppDispatch } from '../../redux/hooks';
-import { setAuth, setError, setLoading } from '../../redux/slices/authSlice';
-import { colors } from '../../theme/colors';
+import { setAuth, setError } from '../../redux/slices/authSlice';
+import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import CustomAlertModal from '../../components/CustomAlertModal';
+import AnimatedButton from '../../components/AnimatedButton';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -18,11 +20,29 @@ export default function LoginScreen() {
   const [loading, setLocalLoading] = useState(false);
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
+  const { themeColors, isDark } = useTheme();
+
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon: string;
+    iconColor?: string;
+    iconBg?: string;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    icon: "alert-circle-outline",
+  });
+
+  const showAlert = (title: string, message: string, icon = "alert-circle-outline", iconColor = themeColors.expense, iconBg = themeColors.softExpense) => {
+    setAlertConfig({ visible: true, title, message, icon, iconColor, iconBg });
+  };
 
   const handleLogin = async () => {
     if (!email || !password) return;
     setLocalLoading(true);
-    dispatch(setLoading(true));
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -31,13 +51,12 @@ export default function LoginScreen() {
 
     if (error) {
       dispatch(setError(error.message));
-      alert(error.message);
+      showAlert("Login Failed", error.message, "close-circle-outline");
     } else {
       dispatch(setAuth({ user: data.user, session: data.session }));
     }
     
     setLocalLoading(false);
-    dispatch(setLoading(false));
   };
 
   const handleGoogleLogin = async () => {
@@ -82,7 +101,7 @@ export default function LoginScreen() {
         }
       }
     } catch (err: any) {
-      alert(err.message || "Something went wrong with Google Login");
+      showAlert("Google Login Failed", err.message || "Something went wrong with Google Login", "close-circle-outline");
     } finally {
       setLocalLoading(false);
     }
@@ -90,77 +109,100 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
-        <Text style={[styles.title]}>Welcome Back</Text>
-        <Text style={[styles.subtitle]}>Log in to sync your expenses</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.muted}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Password"
-            placeholderTextColor={colors.muted}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity 
-            style={styles.eyeIcon} 
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Ionicons 
-              name={showPassword ? "eye-off" : "eye"} 
-              size={24} 
-              color={colors.muted} 
-            />
-          </TouchableOpacity>
+        <View style={styles.header}>
+          <View style={[styles.iconContainer, { backgroundColor: themeColors.softPrimary }]}>
+            <Ionicons name="wallet" size={32} color={themeColors.primary} />
+          </View>
+          <Text style={[styles.title, { color: themeColors.primary }]}>Welcome Back</Text>
+          <Text style={[styles.subtitle, { color: themeColors.muted }]}>Log in to sync your expenses</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.card} />
-          ) : (
-            <Text style={styles.buttonText}>Log In</Text>
-          )}
-        </TouchableOpacity>
+
+        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <TextInput
+            style={[styles.input, { backgroundColor: themeColors.card, borderColor: themeColors.border, color: themeColors.text }]}
+            placeholder="Email"
+            placeholderTextColor={themeColors.muted}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          
+          <View style={[styles.passwordContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            <TextInput
+              style={[styles.passwordInput, { color: themeColors.text }]}
+              placeholder="Password"
+              placeholderTextColor={themeColors.muted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity 
+              style={styles.eyeIcon} 
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons 
+                name={showPassword ? "eye-off" : "eye"} 
+                size={22} 
+                color={themeColors.muted} 
+              />
+            </TouchableOpacity>
+          </View>
+
+          <AnimatedButton 
+            style={[styles.button, { backgroundColor: themeColors.primary }]} 
+            onPress={handleLogin}
+            disabled={loading}
+            hapticFeedback="light"
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.buttonText}>Log In</Text>
+            )}
+          </AnimatedButton>
+        </View>
 
         <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
+          <Text style={[styles.dividerText, { color: themeColors.muted }]}>OR</Text>
+          <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
         </View>
 
-        <TouchableOpacity 
-          style={styles.googleButton} 
+        <AnimatedButton 
+          style={[styles.googleButton, { backgroundColor: themeColors.card, borderColor: themeColors.border }]} 
           onPress={handleGoogleLogin}
           disabled={loading}
+          hapticFeedback="light"
         >
-          <Ionicons name="logo-google" size={20} color={colors.text} />
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
+          <Ionicons name="logo-google" size={20} color={themeColors.text} />
+          <Text style={[styles.googleButtonText, { color: themeColors.text }]}>Continue with Google</Text>
+        </AnimatedButton>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
+          <Text style={[styles.footerText, { color: themeColors.text }]}>Don't have an account? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Signup' as never)}>
-            <Text style={styles.link}>Sign Up</Text>
+            <Text style={[styles.link, { color: themeColors.primary }]}>Sign Up</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        icon={alertConfig.icon as any}
+        iconColor={alertConfig.iconColor || themeColors.primary}
+        iconBg={alertConfig.iconBg || themeColors.softPurple}
+        confirmText="OK"
+        confirmColor={alertConfig.iconColor || themeColors.primary}
+        onConfirm={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+        onCancel={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -168,105 +210,122 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-    padding: 24, // spacing.xl
+    padding: 24,
     justifyContent: 'center',
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   title: {
-    color: colors.primary,
-    fontSize: 28, // textStyles.h1
-    fontWeight: 'bold',
-    marginBottom: 8, // spacing.xs
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: 8,
   },
   subtitle: {
-    color: colors.muted,
-    fontSize: 16, // textStyles.body
-    marginBottom: 40, // spacing.xxl
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  card: {
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   input: {
-    backgroundColor: colors.card,
-    padding: 16, // spacing.m
-    borderRadius: 8, // spacing.s
-    marginBottom: 16, // spacing.m
+    height: 56,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.text,
+    fontSize: 16,
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    marginBottom: 16,
+    height: 56,
+    borderRadius: 16,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   passwordInput: {
     flex: 1,
-    padding: 16,
-    color: colors.text,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    height: '100%',
   },
   eyeIcon: {
     padding: 16,
   },
   button: {
-    backgroundColor: colors.primary,
-    padding: 16, // spacing.m
-    borderRadius: 8, // spacing.s
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
-    marginTop: 8, // spacing.s
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonText: {
-    color: colors.card,
-    fontWeight: 'bold',
-    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 17,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 32,
   },
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.border,
   },
   dividerText: {
-    color: colors.muted,
     paddingHorizontal: 16,
     fontWeight: '600',
+    fontSize: 14,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 8,
+    height: 56,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
     gap: 12,
   },
   googleButtonText: {
-    color: colors.text,
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 16,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24, // spacing.xl
+    marginTop: 32,
   },
   footerText: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: '500',
   },
   link: {
-    color: colors.primary,
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '800',
+    fontSize: 15,
   }
 });
