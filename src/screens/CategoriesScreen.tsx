@@ -183,7 +183,7 @@ export default function CategoriesScreen() {
         );
         return;
       }
-      const nextId = `custom_pm_${cleanName.toLowerCase().replace(/\s+/g, "_")}`;
+      const nextId = `custom_pm_${cleanName.toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
       dispatch(addPaymentMethod({
         id: nextId,
         label: cleanName,
@@ -213,7 +213,7 @@ export default function CategoriesScreen() {
       return;
     }
 
-    const nextId = `custom_${cleanName.toLowerCase().replace(/\s+/g, "_")}`;
+    const nextId = `custom_${cleanName.toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
     const newCat = {
       id: nextId,
       label: cleanName,
