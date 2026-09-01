@@ -21,6 +21,7 @@ type TimeRange = "Week" | "Month" | "Year";
 
 export default function AnalyticsScreen() {
   const transactions = useAppSelector((state) => state.transactions.items);
+  const customCategories = useAppSelector((state) => state.categories.customCategories);
   const { themeColors } = useTheme();
 
   const [timeRange, setTimeRange] = useState<TimeRange>("Month");
@@ -102,7 +103,10 @@ export default function AnalyticsScreen() {
     : 0;
 
   // Calculate breakdown categories based on active chart selection
-  const targetCategories = activeChartType === "expense" ? expenseCategories : incomeCategories;
+  const expenseCategoriesCombined = [...expenseCategories, ...customCategories.filter(c => c.type === "expense")];
+  const incomeCategoriesCombined = [...incomeCategories, ...customCategories.filter(c => c.type === "income")];
+
+  const targetCategories = activeChartType === "expense" ? expenseCategoriesCombined : incomeCategoriesCombined;
   const targetTotal = activeChartType === "expense" ? displayExpenseTotal : displayIncomeTotal;
 
   const categoryBreakdown = targetCategories
@@ -641,7 +645,7 @@ export default function AnalyticsScreen() {
                       </Text>
                     </View>
                     <View style={styles.rowRight}>
-                      <Text style={[styles.categoryPercentText, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                      <Text style={[styles.categoryPercentText, { color: themeColors.muted }]} numberOfLines={1}>
                         {formatPercent(item.amount, activeTotalValue)}%
                       </Text>
                       <Text style={[styles.categoryAmountText, { color: themeColors.text }]}>

@@ -370,7 +370,7 @@ export default function AddExpenseScreen() {
                 </TouchableOpacity>
               );
             })}
-            {Array.from({ length: (3 - (expenseCategories.length % 3)) % 3 }).map((_, i) => (
+            {Array.from({ length: (3 - (combinedExpenseCategories.length % 3)) % 3 }).map((_, i) => (
               <View key={`empty-cat-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
             ))}
           </View>

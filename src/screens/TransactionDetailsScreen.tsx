@@ -29,6 +29,8 @@ export default function TransactionDetailsScreen() {
   const transactionId = route.params?.transaction?.id;
   const transaction = transactions.find((t) => t.id === transactionId);
 
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+  
   if (!transaction) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
@@ -43,7 +45,6 @@ export default function TransactionDetailsScreen() {
   }
 
   const isIncome = transaction.type === "income";
-  const customCategories = useAppSelector(state => state.categories.customCategories);
   const meta = getCategoryMeta(transaction.category, customCategories);
 
   const formattedAmount = isIncome

@@ -581,7 +581,7 @@ export default function DashboardScreen() {
                         <View style={[styles.miniProgressFill, { width: `${Math.min((item.amount/limit)*100, 100)}%`, backgroundColor: isExceeded ? themeColors.expense : isOverBudget ? "#FF9F43" : themeColors.primary }]} />
                       </View>
                     ) : (
-                      <Text style={[styles.breakdownCatPercent, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                      <Text style={[styles.breakdownCatPercent, { color: themeColors.muted }]} numberOfLines={1}>
                         {formatPercent(item.amount, item.type === "income" ? incomeTotal : expenseTotal)}%
                       </Text>
                     )}
@@ -1269,7 +1269,6 @@ const styles = StyleSheet.create({
   breakdownCatPercent: {
     fontSize: 12,
     fontWeight: "600",
-    width: 32,
     textAlign: "right",
   },
   /* Modal Drawer Styles */

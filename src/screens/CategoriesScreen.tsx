@@ -406,7 +406,7 @@ export default function CategoriesScreen() {
                         <View style={[styles.miniProgressFill, { width: `${Math.min((item.total/limit)*100, 100)}%`, backgroundColor: isExceeded ? themeColors.expense : isOverBudget ? "#FF9F43" : themeColors.primary }]} />
                       </View>
                     ) : (
-                      <Text style={[styles.categoryPercentage, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                      <Text style={[styles.categoryPercentage, { color: themeColors.muted }]} numberOfLines={1}>
                         {formatPercent(item.total, targetTotal)}%
                       </Text>
                     )}

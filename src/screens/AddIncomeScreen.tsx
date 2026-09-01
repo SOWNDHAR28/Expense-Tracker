@@ -321,7 +321,7 @@ export default function AddIncomeScreen() {
                 </TouchableOpacity>
               );
             })}
-            {Array.from({ length: (3 - (incomeCategories.length % 3)) % 3 }).map((_, i) => (
+            {Array.from({ length: (3 - (combinedIncomeCategories.length % 3)) % 3 }).map((_, i) => (
               <View key={`empty-cat-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
             ))}
           </View>
