@@ -19,6 +19,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AnimatedButton from '../components/AnimatedButton';
+import * as Haptics from 'expo-haptics';
 
 export default function SettingsScreen() {
   const { themeMode, setThemeMode, themeColors } = useTheme();
@@ -90,6 +91,7 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     showAlert(
       "Confirm Logout",
       "Are you sure you want to log out of your account?",
@@ -108,6 +110,7 @@ export default function SettingsScreen() {
   };
 
   const handleExportData = (type: "json" | "csv") => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const data = type === "json" ? exportDataJSON() : exportDataCSV();
     const title = type === "json" ? "expense_tracker_export.json" : "expense_tracker_export.csv";
 
@@ -160,10 +163,13 @@ export default function SettingsScreen() {
     }
   };
 
+
+
   const handleAboutApp = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     showAlert(
       "Expense Tracker v2.0.0",
-      "A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• Redux Toolkit & Offline Persistence\n• Supabase Cloud Sync & Google OAuth Sign-In\n• Dynamic SVG Analytics (Bar & Donut Charts)\n• Native App Lock (Biometrics/PIN)\n• System Dark & Light Theme Support\n• Custom Date Range Data Export (JSON/CSV)",
+      "A minimal, fast, and beautiful expense & income tracking application built with React Native and TypeScript.\n\nFeatures:\n• Income & Expense Tracking\n• Supabase Cloud Sync & Google OAuth Sign-In\n• Dynamic SVG Analytics (Bar & Donut Charts)\n• Native App Lock (Biometrics/PIN)\n• System Dark & Light Theme Support\n• Custom Date Range Data Export (JSON/CSV)",
       "information-circle-outline",
       false,
       () => {},
@@ -173,6 +179,7 @@ export default function SettingsScreen() {
   };
 
   const handleToggleDeviceLock = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (value) {
       // Trying to turn ON
       const hasHardware = await LocalAuthentication.hasHardwareAsync();

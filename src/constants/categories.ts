@@ -33,8 +33,9 @@ export const expenseCategories: CategoryItem[] = [
 
 export const allCategories = [...incomeCategories, ...expenseCategories];
 
-export function getCategoryById(idOrLabel: string): CategoryItem {
-  const match = allCategories.find(
+export function getCategoryById(idOrLabel: string, customCategories: CategoryItem[] = []): CategoryItem {
+  const allCombined = [...allCategories, ...customCategories];
+  const match = allCombined.find(
     (item) => item.id.toLowerCase() === idOrLabel.toLowerCase() || item.label.toLowerCase() === idOrLabel.toLowerCase()
   );
   if (match) return match;
@@ -48,8 +49,8 @@ export function getCategoryById(idOrLabel: string): CategoryItem {
   };
 }
 
-export function getCategoryMeta(idOrLabel: string) {
-  const cat = getCategoryById(idOrLabel);
+export function getCategoryMeta(idOrLabel: string, customCategories: CategoryItem[] = []) {
+  const cat = getCategoryById(idOrLabel, customCategories);
   return {
     label: cat.label,
     icon: cat.icon,
@@ -57,3 +58,32 @@ export function getCategoryMeta(idOrLabel: string) {
     type: cat.type,
   };
 }
+
+export const PALETTE_COLORS = [
+  "#E74C3C", // Red
+  "#3498DB", // Blue
+  "#2ECC71", // Green
+  "#9B59B6", // Purple
+  "#F1C40F", // Yellow
+  "#E67E22", // Orange
+  "#1ABC9C", // Teal
+  "#FD79A8", // Pink
+];
+
+export const PALETTE_ICONS = [
+  "silverware-fork-knife",
+  "car",
+  "shopping-outline",
+  "file-document-outline",
+  "movie-open-outline",
+  "heart-outline",
+  "school-outline",
+  "airplane",
+  "cash",
+  "laptop",
+  "gift-outline",
+  "coffee",
+  "weight-lifter",
+  "television-play",
+  "dots-horizontal",
+];

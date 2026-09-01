@@ -19,10 +19,10 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { addTransaction, updateTransaction } from "../redux/slices/transactionSlice";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import CustomAlertModal from "../components/CustomAlertModal";
+import CustomTimePicker from "../components/CustomTimePicker";
 import { incomeCategories } from "../constants/categories";
 import { useTheme } from "../context/ThemeContext";
-import CustomAlertModal from "../components/CustomAlertModal";
 import AnimatedButton from "../components/AnimatedButton";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -37,6 +37,9 @@ export default function AddIncomeScreen() {
 
   const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
+
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+  const combinedIncomeCategories = [...incomeCategories, ...customCategories.filter(c => c.type === "income")];
 
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -238,13 +241,9 @@ export default function AddIncomeScreen() {
     });
   };
 
-  const onChangeTime = (event: any, selectedTime?: Date) => {
+  const onSaveTime = (selectedDate: Date) => {
+    setDate(selectedDate);
     setShowTimePicker(false);
-    if (selectedTime) {
-      const nextDate = new Date(date);
-      nextDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setDate(nextDate);
-    }
   };
 
   return (
@@ -257,7 +256,14 @@ export default function AddIncomeScreen() {
           <Text style={[styles.title, { color: themeColors.text }]}>
             {isEditing ? "Edit Income" : "Add Income"}
           </Text>
-          <View style={{ width: 36 }} />
+          <AnimatedButton
+            onPress={handleSave}
+            style={[styles.iconButton, isSaving && { opacity: 0.5 }]}
+            disabled={isSaving}
+            hapticFeedback="light"
+          >
+            <Ionicons name="checkmark" size={24} color={themeColors.primary} />
+          </AnimatedButton>
         </View>
 
         <KeyboardAwareScrollView 
@@ -285,7 +291,7 @@ export default function AddIncomeScreen() {
           {/* Source Selection Grid */}
           <Text style={[styles.label, { color: themeColors.text }]}>Source</Text>
           <View style={styles.grid}>
-            {incomeCategories.map((item) => {
+            {combinedIncomeCategories.map((item) => {
               const selected = selectedCategory.toLowerCase() === item.label.toLowerCase();
               return (
                 <TouchableOpacity
@@ -315,6 +321,9 @@ export default function AddIncomeScreen() {
                 </TouchableOpacity>
               );
             })}
+            {Array.from({ length: (3 - (incomeCategories.length % 3)) % 3 }).map((_, i) => (
+              <View key={`empty-cat-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
+            ))}
           </View>
 
           {/* Payment Method Selection Grid */}
@@ -350,6 +359,9 @@ export default function AddIncomeScreen() {
                 </TouchableOpacity>
               );
             })}
+            {Array.from({ length: (3 - (paymentMethods.length % 3)) % 3 }).map((_, i) => (
+              <View key={`empty-pm-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
+            ))}
           </View>
 
           {/* Date & Time Field */}
@@ -368,15 +380,14 @@ export default function AddIncomeScreen() {
             </Text>
             <Ionicons name="chevron-down" size={18} color={themeColors.muted} />
           </TouchableOpacity>
-
-          {showTimePicker && (
-            <DateTimePicker
-              value={date}
-              mode="time"
-              display="default"
-              onChange={onChangeTime}
-            />
-          )}
+          
+          {/* Custom TimePicker */}
+          <CustomTimePicker
+            visible={showTimePicker}
+            onClose={() => setShowTimePicker(false)}
+            onSave={onSaveTime}
+            initialDate={date}
+          />
 
           {/* Note Field */}
           <Text style={[styles.label, { color: themeColors.text }]}>Note (Optional)</Text>
@@ -565,10 +576,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    justifyContent: "space-between",
+    rowGap: 10,
   },
   gridCard: {
-    width: (width - 36 - 16) / 3,
+    width: "31.5%",
     borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 10,

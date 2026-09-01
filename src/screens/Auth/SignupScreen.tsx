@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { useAppDispatch } from '../../redux/hooks';
@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import CustomAlertModal from '../../components/CustomAlertModal';
 import AnimatedButton from '../../components/AnimatedButton';
+import * as Haptics from 'expo-haptics';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,18 @@ export default function SignupScreen() {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const { themeColors, isDark } = useTheme();
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
 
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
@@ -37,16 +50,17 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    if (!email || !password) return;
+    if (!email.trim() || !password.trim()) return;
     setLocalLoading(true);
     
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email: email.trim(),
+      password: password.trim(),
     });
 
     if (error) {
       dispatch(setError(error.message));
+      triggerShake();
       showAlert("Signup Failed", error.message, "close-circle-outline");
     } else {
       if (data.user) {
@@ -80,7 +94,7 @@ export default function SignupScreen() {
           <Text style={[styles.subtitle, { color: themeColors.muted }]}>Start tracking your expenses securely</Text>
         </View>
 
-        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <Animated.View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, transform: [{ translateX: shakeAnim }] }]}>
           <TextInput
             style={[styles.input, { backgroundColor: themeColors.card, borderColor: themeColors.border, color: themeColors.text }]}
             placeholder="Email"
@@ -102,7 +116,10 @@ export default function SignupScreen() {
             />
             <TouchableOpacity 
               style={styles.eyeIcon} 
-              onPress={() => setShowPassword(!showPassword)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowPassword(!showPassword);
+              }}
             >
               <Ionicons 
                 name={showPassword ? "eye-off" : "eye"} 
@@ -124,7 +141,7 @@ export default function SignupScreen() {
               <Text style={styles.buttonText}>Sign Up</Text>
             )}
           </AnimatedButton>
-        </View>
+        </Animated.View>
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: themeColors.text }]}>Already have an account? </Text>

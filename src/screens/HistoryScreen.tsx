@@ -18,6 +18,7 @@ import { fetchTransactions } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
 import { Transaction } from "../types/expense";
 import ExpenseCard from "../components/ExpenseCard";
+import * as Haptics from "expo-haptics";
 
 type FilterTab = "All" | "Income" | "Expense";
 type SortOption = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
@@ -131,13 +132,19 @@ export default function HistoryScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
-              onPress={() => setShowSearch(!showSearch)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowSearch(!showSearch);
+              }}
             >
               <Ionicons name="search-outline" size={20} color={themeColors.text} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
-              onPress={() => setShowSortModal(true)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowSortModal(true);
+              }}
             >
               <Ionicons name="options-outline" size={20} color={themeColors.text} />
             </TouchableOpacity>
@@ -177,7 +184,10 @@ export default function HistoryScreen() {
                     borderColor: active ? themeColors.primary : themeColors.border,
                   },
                 ]}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTab(tab);
+                }}
               >
                 <Text
                   style={[
@@ -266,6 +276,7 @@ export default function HistoryScreen() {
                         { borderBottomColor: themeColors.border },
                       ]}
                       onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setSortBy(option);
                         setShowSortModal(false);
                       }}

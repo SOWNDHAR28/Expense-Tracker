@@ -19,9 +19,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useAppSelector, useAppDispatch } from '../redux/hooks';
+import { useAppSelector, useAppDispatch } from "../redux/hooks";
+import { formatPercent } from "../utils/format";
 import { clearAuth } from '../redux/slices/authSlice';
 import { fetchTransactions } from '../redux/slices/transactionSlice';
+import { fetchCustomCategories } from '../redux/slices/categorySlice';
 import { useTheme, ThemeMode } from "../context/ThemeContext";
 import ExpenseCard from "../components/ExpenseCard";
 import { expenseCategories, incomeCategories } from "../constants/categories";
@@ -30,13 +32,15 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as LocalAuthentication from 'expo-local-authentication';
 import { setDeviceLockEnabled } from '../redux/slices/authSlice';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get("window");
 
 export default function DashboardScreen() {
   const dispatch = useAppDispatch();
   const transactions = useAppSelector(state => state.transactions.items);
-  const loading = useAppSelector(state => state.transactions.loading);
+  const loading = useAppSelector((state) => state.transactions.loading);
+  const budgetLimits = useAppSelector((state) => state.budgets.limits);
   const { user } = useAppSelector(state => state.auth);
   const username = user?.email?.split('@')[0] || "User";
 
@@ -304,15 +308,19 @@ export default function DashboardScreen() {
     setIsEditingUsername(false);
   };
 
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+
   const categoryBreakdown = useMemo(() => {
-    const monthTotal = currentMonthTx.reduce((sum, t) => sum + t.amount, 0);
-    const allCategories = [...expenseCategories, ...incomeCategories];
+    const allCategories = [...expenseCategories, ...incomeCategories, ...customCategories];
 
     return allCategories
       .map((cat) => {
-        const matchingTxs = currentMonthTx.filter((t) => t.category.toLowerCase() === cat.label.toLowerCase());
+        const matchingTxs = currentMonthTx.filter(
+          (t) => t.category.toLowerCase() === cat.label.toLowerCase() && t.type === cat.type
+        );
         const amount = matchingTxs.reduce((sum, t) => sum + t.amount, 0);
-        const percentage = monthTotal > 0 ? Math.round((amount / monthTotal) * 100) : 0;
+        const relevantTotal = cat.type === "income" ? incomeTotal : expenseTotal;
+        const percentage = relevantTotal > 0 ? parseFloat(formatPercent(amount, relevantTotal)) : 0;
         
         // Find most recent transaction for sorting
         const latestTx = matchingTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -322,7 +330,7 @@ export default function DashboardScreen() {
       })
       .filter((item) => item.amount > 0)
       .sort((a, b) => b.lastUpdated - a.lastUpdated); // Sort by most recent
-  }, [currentMonthTx, expenseCategories, incomeCategories]);
+  }, [currentMonthTx, expenseCategories, incomeCategories, customCategories, expenseTotal, incomeTotal]);
 
   // Left Drawer (Menu & Settings)
   const [leftDrawerVisible, setLeftDrawerVisible] = useState(false);
@@ -331,6 +339,7 @@ export default function DashboardScreen() {
   const leftSlideAnim = useRef(new Animated.Value(-width)).current;
 
   const openLeftDrawer = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLeftDrawerVisible(true);
     Animated.timing(leftSlideAnim, {
       toValue: 0,
@@ -356,6 +365,7 @@ export default function DashboardScreen() {
   const rightSlideAnim = useRef(new Animated.Value(width)).current;
 
   const openRightDrawer = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRightDrawerVisible(true);
     Animated.timing(rightSlideAnim, {
       toValue: 0,
@@ -380,6 +390,7 @@ export default function DashboardScreen() {
   };
 
   const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     closeRightDrawer();
     setShowLogoutModal(true);
   };
@@ -402,7 +413,10 @@ export default function DashboardScreen() {
     themeMode === "system" ? "System" : themeMode === "dark" ? "Dark" : "Light";
 
   const onRefresh = async () => {
-    await dispatch(fetchTransactions());
+    await Promise.all([
+      dispatch(fetchTransactions()),
+      dispatch(fetchCustomCategories()),
+    ]);
   };
 
   return (
@@ -438,7 +452,14 @@ export default function DashboardScreen() {
         </View>
 
         {/* Net Balance Card */}
-        <TouchableOpacity style={styles.netBalanceCard} activeOpacity={0.8} onPress={() => navigation.navigate("Analytics")}>
+        <TouchableOpacity
+          style={styles.netBalanceCard}
+          activeOpacity={0.8}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate("Analytics");
+          }}
+        >
           <View style={styles.cardHeaderRow}>
             <View>
               <Text style={styles.netBalanceLabel}>Net Balance</Text>
@@ -485,7 +506,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* Recent Transactions Section */}
-        <View style={styles.sectionHeader}>
+        <View style={[styles.sectionHeader, { marginTop: 22 }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Recent Transactions</Text>
           <TouchableOpacity onPress={() => navigation.navigate("History")}>
             <Text style={[styles.seeAllLink, { color: themeColors.primary }]}>See All</Text>
@@ -509,40 +530,65 @@ export default function DashboardScreen() {
         {/* Categories with Expense Breakdown */}
         <View style={[styles.sectionHeader, { marginTop: 22 }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Category Breakdown</Text>
+          {categoryBreakdown.length > 5 && (
+            <TouchableOpacity onPress={() => navigation.navigate("Categories")}>
+              <Text style={[styles.seeAllLink, { color: themeColors.primary }]}>See All</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {categoryBreakdown.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: themeColors.card, borderColor: themeColors.border, minHeight: 80 }]}>
-            <Text style={[styles.emptyText, { color: themeColors.text, fontSize: 14 }]}>No expenses logged yet</Text>
+            <Text style={[styles.emptyText, { color: themeColors.text, fontSize: 14 }]}>No transactions this month</Text>
           </View>
         ) : (
-          <View style={[styles.categoryBreakdownContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-            {categoryBreakdown.map((item, index) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.categoryBreakdownRow,
-                  index < categoryBreakdown.length - 1 && { borderBottomColor: themeColors.border, borderBottomWidth: 1 },
-                ]}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate("CategorySummary", { categoryName: item.label })}
-              >
-                <View style={styles.breakdownRowLeft}>
-                  <View style={[styles.breakdownIconBox, { backgroundColor: `${item.color}1E` }]}>
-                    <MaterialCommunityIcons name={item.icon as any} size={18} color={item.color} />
+          <View style={[styles.categoryBreakdownContainer]}>
+            {categoryBreakdown.slice(0, 5).map((item, index) => {
+              const limit = item.type === "expense" ? budgetLimits[item.label] : undefined;
+              const isOverBudget = limit ? item.amount >= limit * 0.8 : false;
+              const isExceeded = limit ? item.amount >= limit : false;
+              const bgColor = isExceeded ? `${themeColors.expense}15` : themeColors.card;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.categoryBreakdownRow,
+                    { backgroundColor: bgColor }
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate("CategorySummary", { categoryName: item.label, categoryType: item.type })}
+                >
+                  <View style={styles.breakdownRowLeft}>
+                    <View style={[styles.breakdownIconBox, { backgroundColor: isExceeded ? `${themeColors.expense}20` : `${item.color}1E` }]}>
+                      <MaterialCommunityIcons name={item.icon as any} size={18} color={isExceeded ? themeColors.expense : item.color} />
+                    </View>
+                    <View>
+                      <Text style={[styles.breakdownCatName, { color: isExceeded ? themeColors.expense : themeColors.text }]}>{item.label}</Text>
+                      {limit ? (
+                        <Text style={[styles.budgetLimitText, { color: isExceeded ? themeColors.expense : themeColors.muted }]}>
+                          ₹{item.amount.toLocaleString("en-IN")} / ₹{limit.toLocaleString("en-IN")}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                  <Text style={[styles.breakdownCatName, { color: themeColors.text }]}>{item.label}</Text>
-                </View>
-                <View style={styles.breakdownRowRight}>
-                  <Text style={[styles.breakdownCatAmount, { color: themeColors.text }]}>
-                    ₹{item.amount.toLocaleString("en-IN")}
-                  </Text>
-                  <Text style={[styles.breakdownCatPercent, { color: themeColors.muted }]}>
-                    {item.percentage}%
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.breakdownRowRight}>
+                    <Text style={[styles.breakdownCatAmount, { color: isExceeded ? themeColors.expense : themeColors.text }]}>
+                      ₹{item.amount.toLocaleString("en-IN")}
+                    </Text>
+                    {limit ? (
+                      <View style={[styles.miniProgressTrack, { backgroundColor: isExceeded ? `${themeColors.expense}20` : themeColors.border }]}>
+                        <View style={[styles.miniProgressFill, { width: `${Math.min((item.amount/limit)*100, 100)}%`, backgroundColor: isExceeded ? themeColors.expense : isOverBudget ? "#FF9F43" : themeColors.primary }]} />
+                      </View>
+                    ) : (
+                      <Text style={[styles.breakdownCatPercent, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatPercent(item.amount, item.type === "income" ? incomeTotal : expenseTotal)}%
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -784,9 +830,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
                       • Income & Expense Tracking
                     </Text>
-                    <Text style={[styles.aboutText, { color: themeColors.muted }]}>
-                      • Redux Toolkit & Offline Persistence
-                    </Text>
+
                     <Text style={[styles.aboutText, { color: themeColors.muted }]}>
                       • Supabase Cloud Sync & Google OAuth Sign-In
                     </Text>
@@ -1173,16 +1217,15 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   categoryBreakdownContainer: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
     marginBottom: 20,
   },
   categoryBreakdownRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 14,
+    padding: 14,
+    borderRadius: 16,
+    marginVertical: 6,
   },
   breakdownRowLeft: {
     flexDirection: "row",
@@ -1200,10 +1243,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  budgetLimitText: {
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  miniProgressTrack: {
+    width: 64,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  miniProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
   breakdownRowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+    alignItems: "flex-end",
   },
   breakdownCatAmount: {
     fontSize: 14,

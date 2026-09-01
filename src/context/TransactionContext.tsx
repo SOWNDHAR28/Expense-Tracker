@@ -2,6 +2,9 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { Transaction, TransactionDraft, TransactionType } from "../types/expense";
 import { getCategoryById, CategoryItem, incomeCategories as staticIncomeCategories, expenseCategories as staticExpenseCategories } from "../constants/categories";
 import { dbService } from "../storage/db";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "../redux/store";
+import { addCustomCategory as addCategoryToRedux } from "../redux/slices/categorySlice";
 
 type TransactionContextValue = {
   loading: boolean;
@@ -106,18 +109,23 @@ const defaultSeedData: Transaction[] = [
 export function TransactionProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [customCategories, setCustomCategories] = useState<CategoryItem[]>([]);
+  const customCategories = useSelector((state: RootState) => state.categories.customCategories);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     (async () => {
       try {
-        // Load transactions from SQLite database
-        const saved = dbService.getAllTransactions();
-        setTransactions(saved || []);
-
-        // Load custom categories from SQLite
-        const customCats = dbService.getCustomCategories();
-        setCustomCategories(customCats);
+        await dbService.init();
+        const storedTxs = await dbService.loadTransactions();
+        
+        if (storedTxs.length === 0) {
+          setTransactions(defaultSeedData);
+          for (const t of defaultSeedData) {
+            await dbService.addTransaction(t);
+          }
+        } else {
+          setTransactions(storedTxs);
+        }
       } catch (err) {
         console.error("Failed to load transactions/categories on startup:", err);
       } finally {
@@ -227,8 +235,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
         setTransactions([]);
       },
       addCustomCategory: async (cat) => {
-        dbService.addCustomCategory(cat);
-        setCustomCategories((prev) => [...prev, cat]);
+        dispatch(addCategoryToRedux(cat));
       },
       exportDataJSON: () => JSON.stringify(transactions, null, 2),
       exportDataCSV: () => {

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatPercent } from "../utils/format";
 import { useAppSelector } from "../redux/hooks";
 import { incomeCategories, expenseCategories } from "../constants/categories";
 import { useTheme } from "../context/ThemeContext";
@@ -631,7 +632,6 @@ export default function AnalyticsScreen() {
               </View>
             ) : (
               breakdownToDisplay.map((item) => {
-                const percentage = activeTotalValue > 0 ? Math.round((item.amount / activeTotalValue) * 100) : 0;
                 return (
                   <View key={item.label} style={styles.breakdownRow}>
                     <View style={styles.rowLeft}>
@@ -641,8 +641,8 @@ export default function AnalyticsScreen() {
                       </Text>
                     </View>
                     <View style={styles.rowRight}>
-                      <Text style={[styles.categoryPercentText, { color: themeColors.muted }]}>
-                        {percentage}%
+                      <Text style={[styles.categoryPercentText, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatPercent(item.amount, activeTotalValue)}%
                       </Text>
                       <Text style={[styles.categoryAmountText, { color: themeColors.text }]}>
                         ₹{item.amount.toLocaleString("en-IN")}

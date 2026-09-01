@@ -13,6 +13,7 @@ import { useAppSelector, useAppDispatch } from "../redux/hooks";
 import { deleteTransaction } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
 import { getCategoryMeta } from "../constants/categories";
+import { formatTime } from "../utils/formatters";
 import { Transaction } from "../types/expense";
 import CustomAlertModal from "../components/CustomAlertModal";
 
@@ -42,7 +43,8 @@ export default function TransactionDetailsScreen() {
   }
 
   const isIncome = transaction.type === "income";
-  const meta = getCategoryMeta(transaction.category);
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+  const meta = getCategoryMeta(transaction.category, customCategories);
 
   const formattedAmount = isIncome
     ? `+₹${transaction.amount.toLocaleString("en-IN")}`

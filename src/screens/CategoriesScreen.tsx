@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,61 +9,67 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   Platform,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useAppSelector, useAppDispatch } from "../redux/hooks";
 import { addPaymentMethod, removePaymentMethod } from "../redux/slices/paymentSlice";
-import { incomeCategories, expenseCategories } from "../constants/categories";
+import { addCustomCategoryToCloud } from "../redux/slices/categorySlice";
 import { useTheme } from "../context/ThemeContext";
 import CustomAlertModal from "../components/CustomAlertModal";
-
-const PALETTE_COLORS = [
-  "#E74C3C", // Red
-  "#3498DB", // Blue
-  "#2ECC71", // Green
-  "#9B59B6", // Purple
-  "#F1C40F", // Yellow
-  "#E67E22", // Orange
-  "#1ABC9C", // Teal
-  "#FD79A8", // Pink
-];
-
-const PALETTE_ICONS = [
-  "silverware-fork-knife",
-  "car",
-  "shopping-outline",
-  "file-document-outline",
-  "movie-open-outline",
-  "heart-outline",
-  "school-outline",
-  "airplane",
-  "cash",
-  "laptop",
-  "gift-outline",
-  "coffee",
-  "weight-lifter",
-  "television-play",
-  "dots-horizontal",
-];
+import { formatPercent } from "../utils/format";
+import { incomeCategories as staticIncome, expenseCategories as staticExpense, PALETTE_COLORS, PALETTE_ICONS } from "../constants/categories";
+import * as Haptics from "expo-haptics";
 
 export default function CategoriesScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
   const transactions = useAppSelector((state) => state.transactions.items);
   const paymentMethods = useAppSelector((state) => state.payments.items);
+  const budgetLimits = useAppSelector((state) => state.budgets.limits);
+  const customCategories = useAppSelector((state) => state.categories.customCategories);
+  const { themeColors } = useTheme();
   
-  const expenseTotal = transactions
+  const currentMonthTransactions = transactions.filter((t) => {
+    const txDate = new Date(t.date);
+    const today = new Date();
+    return txDate.getMonth() === today.getMonth() && txDate.getFullYear() === today.getFullYear();
+  });
+
+  const expenseTotal = currentMonthTransactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
     
-  const incomeTotal = transactions
+  const incomeTotal = currentMonthTransactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
-  const { themeColors } = useTheme();
+    
+  const expenseCategories = [...staticExpense, ...customCategories.filter(c => c.type === "expense")];
+  const incomeCategories = [...staticIncome, ...customCategories.filter(c => c.type === "income")];
 
   const [activeTab, setActiveTab] = useState<"expense" | "income" | "payment">("expense");
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    translateYAnim.setValue(20);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [activeTab]);
 
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -120,11 +126,12 @@ export default function CategoriesScreen() {
   // Map categories and calculate totals & percentages dynamically
   const categoriesWithTotals = targetCategories
     .map((cat) => {
-      const total = transactions
-        .filter((t) => t.type === activeTab && t.category.toLowerCase() === cat.label.toLowerCase())
-        .reduce((sum, t) => sum + t.amount, 0);
+      const currentMonthTx = currentMonthTransactions.filter((t) => {
+        return t.type === activeTab && t.category.toLowerCase() === cat.label.toLowerCase();
+      });
 
-      const percentage = targetTotal > 0 ? Math.round((total / targetTotal) * 100) : 0;
+      const total = currentMonthTx.reduce((sum, t) => sum + t.amount, 0);
+      const percentage = targetTotal > 0 ? parseFloat(formatPercent(total, targetTotal)) : 0;
 
       return {
         ...cat,
@@ -133,6 +140,17 @@ export default function CategoriesScreen() {
       };
     })
     .sort((a, b) => b.total - a.total); // Sort by highest spending
+
+  const paymentMethodsWithTotals = paymentMethods.map((pm) => {
+    const currentMonthTx = currentMonthTransactions.filter((t) => {
+      return t.paymentMethod.toLowerCase() === pm.label.toLowerCase() && 
+             t.type === "expense"; // Only counting expenses for payment limits
+    });
+    const total = currentMonthTx.reduce((sum, t) => sum + t.amount, 0);
+    return { ...pm, total };
+  }).sort((a, b) => b.total - a.total);
+
+  const paymentTotal = paymentMethodsWithTotals.reduce((sum, pm) => sum + pm.total, 0);
 
   const handleCreateCategory = async () => {
     const cleanName = newCatName.trim();
@@ -201,18 +219,10 @@ export default function CategoriesScreen() {
       label: cleanName,
       icon: newCatIcon,
       color: newCatColor,
-      type: activeTab,
+      type: activeTab as "income" | "expense",
     };
 
-    showAlert(
-      "Coming Soon",
-      "Custom categories with cloud sync will be available in a future update.",
-      "information-circle-outline",
-      false,
-      () => {},
-      themeColors.primary,
-      themeColors.softPurple
-    );
+    dispatch(addCustomCategoryToCloud(newCat));
     setShowAddModal(false);
     setNewCatName("");
   };
@@ -236,7 +246,10 @@ export default function CategoriesScreen() {
               styles.segmentBtn,
               activeTab === "expense" && { backgroundColor: themeColors.card },
             ]}
-            onPress={() => setActiveTab("expense")}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab("expense");
+            }}
           >
             <Text
               style={[
@@ -252,7 +265,10 @@ export default function CategoriesScreen() {
               styles.segmentBtn,
               activeTab === "income" && { backgroundColor: themeColors.card },
             ]}
-            onPress={() => setActiveTab("income")}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab("income");
+            }}
           >
             <Text
               style={[
@@ -268,7 +284,10 @@ export default function CategoriesScreen() {
               styles.segmentBtn,
               activeTab === "payment" && { backgroundColor: themeColors.card },
             ]}
-            onPress={() => setActiveTab("payment")}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab("payment");
+            }}
           >
             <Text
               style={[
@@ -282,56 +301,121 @@ export default function CategoriesScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { flexGrow: 1 }]} showsVerticalScrollIndicator={false} alwaysBounceVertical={true}>
         {/* Categories List */}
-        <View style={styles.cardList}>
+        <Animated.View style={[styles.cardList, { opacity: fadeAnim, transform: [{ translateY: translateYAnim }] }]}>
           {activeTab === "payment" ? (
-            paymentMethods.map((item) => (
-              <View
-                key={item.id}
-                style={[styles.categoryRow, { borderBottomColor: themeColors.border }]}
-              >
-                <View style={styles.rowLeft}>
-                  <View style={[styles.iconBox, { backgroundColor: `${item.color}1E` }]}>
-                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+            paymentMethodsWithTotals.map((item) => {
+              const limit = budgetLimits[item.label];
+              const isOverBudget = limit ? item.total >= limit * 0.8 : false;
+              const isExceeded = limit ? item.total >= limit : false;
+              const bgColor = isExceeded ? `${themeColors.expense}15` : themeColors.card;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.categoryRow,
+                    { backgroundColor: bgColor, borderRadius: 16, padding: 14, marginVertical: 6 },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    navigation.navigate("CategorySummary", { categoryName: item.label, isMode: true });
+                  }}
+                >
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: isExceeded ? `${themeColors.expense}20` : `${item.color}1E` }]}>
+                      <MaterialCommunityIcons name={item.icon as any} size={20} color={isExceeded ? themeColors.expense : item.color} />
+                    </View>
+                    <View>
+                      <Text style={[styles.categoryName, { color: isExceeded ? themeColors.expense : themeColors.text }]}>{item.label}</Text>
+                      {limit ? (
+                        <Text style={[styles.budgetLimitText, { color: isExceeded ? themeColors.expense : themeColors.muted }]}>
+                          ₹{item.total.toLocaleString("en-IN")} / ₹{limit.toLocaleString("en-IN")}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                  <Text style={[styles.categoryName, { color: themeColors.text }]}>{item.label}</Text>
-                </View>
-                <View style={styles.rowRight}>
-                  {!item.isDefault && (
-                    <TouchableOpacity onPress={() => dispatch(removePaymentMethod(item.id))}>
-                      <Ionicons name="trash-outline" size={20} color={themeColors.expense} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            ))
+                  <View style={styles.rowRight}>
+                    <Text style={[styles.categoryAmount, { color: isExceeded ? themeColors.expense : themeColors.text, marginBottom: limit ? 0 : 2 }]}>
+                      ₹{item.total.toLocaleString("en-IN")}
+                    </Text>
+                    {limit ? (
+                      <View style={[styles.miniProgressTrack, { backgroundColor: isExceeded ? `${themeColors.expense}20` : themeColors.border }]}>
+                        <View style={[styles.miniProgressFill, { width: `${Math.min((item.total/limit)*100, 100)}%`, backgroundColor: isExceeded ? themeColors.expense : isOverBudget ? "#FF9F43" : themeColors.primary }]} />
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                        <Text style={[styles.categoryPercentage, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatPercent(item.total, paymentTotal)}%
+                        </Text>
+                        {!item.isDefault && (
+                          <TouchableOpacity onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            dispatch(removePaymentMethod(item.id));
+                          }}>
+                            <Ionicons name="trash-outline" size={16} color={themeColors.expense} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           ) : (
-            categoriesWithTotals.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.categoryRow, { borderBottomColor: themeColors.border }]}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate("CategorySummary", { categoryName: item.label })}
-              >
-                <View style={styles.rowLeft}>
-                  <View style={[styles.iconBox, { backgroundColor: `${item.color}1E` }]}>
-                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+            categoriesWithTotals.map((item, index) => {
+              const limit = activeTab === "expense" ? budgetLimits[item.label] : undefined;
+              const isOverBudget = limit ? item.total >= limit * 0.8 : false;
+              const isExceeded = limit ? item.total >= limit : false;
+              const bgColor = isExceeded ? `${themeColors.expense}15` : themeColors.card;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.categoryRow,
+                    { backgroundColor: bgColor, borderRadius: 16, padding: 14, marginVertical: 6 },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    navigation.navigate("CategorySummary", { categoryName: item.label, categoryType: activeTab });
+                  }}
+                >
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: isExceeded ? `${themeColors.expense}20` : `${item.color}1E` }]}>
+                      <MaterialCommunityIcons name={item.icon as any} size={20} color={isExceeded ? themeColors.expense : item.color} />
+                    </View>
+                    <View>
+                      <Text style={[styles.categoryName, { color: isExceeded ? themeColors.expense : themeColors.text }]}>{item.label}</Text>
+                      {limit ? (
+                        <Text style={[styles.budgetLimitText, { color: isExceeded ? themeColors.expense : themeColors.muted }]}>
+                          ₹{item.total.toLocaleString("en-IN")} / ₹{limit.toLocaleString("en-IN")}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                  <Text style={[styles.categoryName, { color: themeColors.text }]}>{item.label}</Text>
-                </View>
-                <View style={styles.rowRight}>
-                  <Text style={[styles.categoryAmount, { color: themeColors.text }]}>
-                    ₹{item.total.toLocaleString("en-IN")}
-                  </Text>
-                  <Text style={[styles.categoryPercentage, { color: themeColors.muted }]}>
-                    {item.percentage}%
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                  <View style={styles.rowRight}>
+                    <Text style={[styles.categoryAmount, { color: isExceeded ? themeColors.expense : themeColors.text }]}>
+                      ₹{item.total.toLocaleString("en-IN")}
+                    </Text>
+                    {limit ? (
+                      <View style={[styles.miniProgressTrack, { backgroundColor: isExceeded ? `${themeColors.expense}20` : themeColors.border }]}>
+                        <View style={[styles.miniProgressFill, { width: `${Math.min((item.total/limit)*100, 100)}%`, backgroundColor: isExceeded ? themeColors.expense : isOverBudget ? "#FF9F43" : themeColors.primary }]} />
+                      </View>
+                    ) : (
+                      <Text style={[styles.categoryPercentage, { color: themeColors.muted }]} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatPercent(item.total, targetTotal)}%
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Add Custom Category Bottom Modal Drawer */}
@@ -378,7 +462,10 @@ export default function CategoriesScreen() {
                           { backgroundColor: color, borderColor: themeColors.text },
                           selected && { borderWidth: 2.5 },
                         ]}
-                        onPress={() => setNewCatColor(color)}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setNewCatColor(color);
+                        }}
                       />
                     );
                   })}
@@ -396,7 +483,10 @@ export default function CategoriesScreen() {
                           styles.iconCircle,
                           { backgroundColor: selected ? themeColors.primary + "22" : themeColors.surface, borderColor: selected ? themeColors.primary : themeColors.border },
                         ]}
-                        onPress={() => setNewCatIcon(icon)}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setNewCatIcon(icon);
+                        }}
                       >
                         <MaterialCommunityIcons
                           name={icon as any}
@@ -411,7 +501,10 @@ export default function CategoriesScreen() {
                 {/* Create Button */}
                 <TouchableOpacity
                   style={[styles.createBtn, { backgroundColor: themeColors.primary }]}
-                  onPress={handleCreateCategory}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    handleCreateCategory();
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.createBtnText}>Create Category</Text>
@@ -479,6 +572,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingVertical: 10,
+    paddingBottom: 100,
   },
   cardList: {
     paddingHorizontal: 16,
@@ -487,8 +581,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
   },
   rowLeft: {
     flexDirection: "row",
@@ -506,19 +598,32 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
+  budgetLimitText: {
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  miniProgressTrack: {
+    width: 64,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  miniProgressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
   rowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    alignItems: "flex-end",
   },
   categoryAmount: {
     fontSize: 15,
     fontWeight: "700",
   },
   categoryPercentage: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    width: 38,
     textAlign: "right",
   },
   /* Bottom Drawer Modal */

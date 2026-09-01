@@ -1,5 +1,5 @@
-import React from "react";
-import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useRef } from "react";
+import { View, TouchableOpacity, StyleSheet, Animated } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DashboardScreen from "../screens/DashboardScreen";
@@ -9,12 +9,60 @@ import SettingsScreen from "../screens/SettingsScreen";
 import CategoriesScreen from "../screens/CategoriesScreen";
 import { useTheme } from "../context/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 
 const Tab = createBottomTabNavigator();
 
-// Empty component for 'Add' tab since button click intercepts navigation
+// Empty placeholder for the FAB tab slot
 function DummyAddScreen() {
   return null;
+}
+
+// Animated Floating Action Button with spring scale + medium haptic
+function AnimatedFAB({ onPress, themeColors }: { onPress: () => void; themeColors: any }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.88,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 8,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 12,
+    }).start();
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onPress();
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      style={styles.floatingButtonContainer}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
+    >
+      <Animated.View
+        style={[
+          styles.floatingCircle,
+          { backgroundColor: themeColors.primary, transform: [{ scale }] },
+        ]}
+      >
+        <MaterialCommunityIcons name="plus" size={30} color="#FFFFFF" />
+      </Animated.View>
+    </TouchableOpacity>
+  );
 }
 
 export default function MainTabs({ navigation }: any) {
@@ -38,15 +86,15 @@ export default function MainTabs({ navigation }: any) {
           elevation: 0,
           shadowOpacity: 0,
           shadowColor: "transparent",
-          minHeight: 64 + (insets.bottom > 0 ? 0 : 8), // Give a little extra if no gestures
+          minHeight: 68 + (insets.bottom > 0 ? 0 : 8),
         },
         tabBarItemStyle: {
-          paddingVertical: 8,
+          paddingVertical: 6,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "700",
-          marginBottom: insets.bottom > 0 ? 0 : 6,
+          marginBottom: insets.bottom > 0 ? 0 : 4,
         },
         tabBarIcon: ({ color, size }) => {
           const iconMap: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -55,9 +103,7 @@ export default function MainTabs({ navigation }: any) {
             Analytics: "chart-pie",
             Categories: "view-grid-outline",
           };
-
           if (route.name === "Add") return null;
-
           return (
             <MaterialCommunityIcons
               name={iconMap[route.name] ?? "circle-outline"}
@@ -66,26 +112,34 @@ export default function MainTabs({ navigation }: any) {
             />
           );
         },
+        // Add light haptic to every tab press
+        tabBarButton: (props) => {
+          if (route.name === "Add") return null;
+          return (
+            <TouchableOpacity
+              {...props}
+              onPress={(e) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                props.onPress?.(e);
+              }}
+            />
+          );
+        },
       })}
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="History" component={HistoryScreen} />
-      
-      {/* Central Floating Action Button */}
+
+      {/* Central Animated FAB */}
       <Tab.Screen
         name="Add"
         component={DummyAddScreen}
         options={{
-          tabBarButton: (props) => (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.floatingButtonContainer}
+          tabBarButton: () => (
+            <AnimatedFAB
+              themeColors={themeColors}
               onPress={() => navigation.navigate("AddTransactionModal")}
-            >
-              <View style={[styles.floatingCircle, { backgroundColor: themeColors.primary }]}>
-                <MaterialCommunityIcons name="plus" size={30} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
+            />
           ),
         }}
       />

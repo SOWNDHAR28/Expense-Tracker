@@ -20,9 +20,10 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { addTransaction, updateTransaction } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
+import { formatPercent } from "../utils/format";
 import { expenseCategories } from "../constants/categories";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import CustomAlertModal from "../components/CustomAlertModal";
+import CustomTimePicker from "../components/CustomTimePicker";
 import AnimatedButton from "../components/AnimatedButton";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto"; // To generate UUIDs for local items
@@ -37,6 +38,12 @@ export default function AddExpenseScreen() {
 
   const dispatch = useAppDispatch();
   const { themeColors } = useTheme();
+  
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+  const combinedExpenseCategories = [...expenseCategories, ...customCategories.filter(c => c.type === "expense")];
+  
+  const budgetLimits = useAppSelector((state) => state.budgets.limits);
+  const transactions = useAppSelector((state) => state.transactions.items);
 
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -142,6 +149,22 @@ export default function AddExpenseScreen() {
     year: "numeric",
   });
 
+  const currentLimit = budgetLimits[selectedCategory];
+  const currentMonthTransactions = transactions.filter((t) => {
+    if (t.category.toLowerCase() !== selectedCategory.toLowerCase() || t.type !== "expense") return false;
+    const txDate = new Date(t.date);
+    const today = new Date();
+    // Exclude the currently edited transaction so we don't double count it
+    if (isEditing && t.id === transaction?.id) return false;
+    return txDate.getMonth() === today.getMonth() && txDate.getFullYear() === today.getFullYear();
+  });
+  const monthlySpent = currentMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+  
+  const numericAmountTyped = Number(amount.replace(/,/g, "")) || 0;
+  const projectedTotal = monthlySpent + numericAmountTyped;
+  const isApproachingLimit = currentLimit ? projectedTotal >= currentLimit * 0.8 && projectedTotal < currentLimit : false;
+  const isExceedingLimit = currentLimit ? projectedTotal >= currentLimit : false;
+
   const handleSave = async () => {
     if (isSavingRef.current) return;
 
@@ -173,18 +196,6 @@ export default function AddExpenseScreen() {
           date: date.toISOString(),
           updatedAt: new Date().toISOString(),
         })).unwrap();
-        showAlert(
-          "Expense Updated",
-          "Expense transaction updated successfully!",
-          "checkmark-circle-outline",
-          false,
-          () => {
-            navigation.goBack();
-          },
-          themeColors.income,
-          themeColors.softIncome
-        );
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         await dispatch(addTransaction({
           id: Crypto.randomUUID(),
@@ -197,19 +208,43 @@ export default function AddExpenseScreen() {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })).unwrap();
-        showAlert(
-          "Expense Saved",
-          "Expense transaction added successfully!",
-          "checkmark-circle-outline",
-          false,
-          () => {
-            navigation.goBack();
-          },
-          themeColors.income,
-          themeColors.softIncome
-        );
+      }
+
+      let alertTitle = isEditing ? "Expense Updated" : "Expense Saved";
+      let alertMessage = isEditing ? "Expense transaction updated successfully!" : "Expense transaction added successfully!";
+      let alertIcon = "checkmark-circle-outline";
+      let iconColor = themeColors.income;
+      let iconBg = themeColors.softIncome;
+
+      if (isExceedingLimit) {
+        alertTitle = "Budget Exceeded!";
+        alertMessage = `You've spent ₹${projectedTotal.toLocaleString("en-IN")} and exceeded your monthly limit of ₹${currentLimit.toLocaleString("en-IN")} for ${selectedCategory}.`;
+        alertIcon = "alert-circle";
+        iconColor = themeColors.expense;
+        iconBg = themeColors.softExpense;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else if (isApproachingLimit) {
+        alertTitle = "Budget Warning";
+        alertMessage = `You've reached ${formatPercent(projectedTotal, currentLimit)}% of your monthly limit for ${selectedCategory}.`;
+        alertIcon = "warning";
+        iconColor = "#FF9F43"; // Orange warning
+        iconBg = "#FF9F4320";
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+
+      showAlert(
+        alertTitle,
+        alertMessage,
+        alertIcon,
+        false,
+        () => {
+          navigation.goBack();
+        },
+        iconColor,
+        iconBg
+      );
     } catch (err: any) {
       showAlert(
         "Save Failed",
@@ -238,13 +273,9 @@ export default function AddExpenseScreen() {
     });
   };
 
-  const onChangeTime = (event: any, selectedTime?: Date) => {
+  const onSaveTime = (selectedDate: Date) => {
+    setDate(selectedDate);
     setShowTimePicker(false);
-    if (selectedTime) {
-      const nextDate = new Date(date);
-      nextDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setDate(nextDate);
-    }
   };
 
   return (
@@ -272,27 +303,44 @@ export default function AddExpenseScreen() {
           contentContainerStyle={styles.container} 
           showsVerticalScrollIndicator={false}
           enableOnAndroid={true}
-          keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="handled"
           extraScrollHeight={Platform.OS === 'ios' ? 20 : 20}
         >
           {/* Amount Input */}
           <Text style={[styles.label, { color: themeColors.text }]}>Amount</Text>
-          <View style={[styles.amountContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <View style={[styles.amountContainer, { backgroundColor: themeColors.card, borderColor: isExceedingLimit ? themeColors.expense : isApproachingLimit ? "#FF9F43" : themeColors.border }]}>
             <Text style={[styles.rupeeSymbol, { color: themeColors.text }]}>₹</Text>
             <TextInput
               style={[styles.amountInput, { color: themeColors.text }]}
               value={amount}
               onChangeText={setAmount}
               keyboardType="numeric"
-              placeholder="0"
+              placeholder="0.00"
               placeholderTextColor={themeColors.muted}
+              maxLength={10}
             />
           </View>
+            
+          {/* Real-time Budget Warning */}
+          {(isApproachingLimit || isExceedingLimit) && (
+            <Text style={{
+              color: isExceedingLimit ? themeColors.expense : "#FF9F43",
+              fontSize: 12,
+              fontWeight: "600",
+              marginTop: 6,
+              marginBottom: 10,
+              marginLeft: 4,
+            }}>
+              {isExceedingLimit 
+                ? `This exceeds your monthly budget of ₹${currentLimit.toLocaleString("en-IN")}.` 
+                : `This will push you to ${formatPercent(projectedTotal, currentLimit)}% of your limit.`}
+            </Text>
+          )}
 
           {/* Category Selection Grid - 3 items in a row */}
           <Text style={[styles.label, { color: themeColors.text }]}>Category</Text>
           <View style={styles.grid}>
-            {expenseCategories.map((item) => {
+            {combinedExpenseCategories.map((item) => {
               const selected = selectedCategory.toLowerCase() === item.label.toLowerCase();
               return (
                 <TouchableOpacity
@@ -322,6 +370,9 @@ export default function AddExpenseScreen() {
                 </TouchableOpacity>
               );
             })}
+            {Array.from({ length: (3 - (expenseCategories.length % 3)) % 3 }).map((_, i) => (
+              <View key={`empty-cat-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
+            ))}
           </View>
 
           {/* Payment Method Selection Grid */}
@@ -357,6 +408,9 @@ export default function AddExpenseScreen() {
                 </TouchableOpacity>
               );
             })}
+            {Array.from({ length: (3 - (paymentMethods.length % 3)) % 3 }).map((_, i) => (
+              <View key={`empty-pm-${i}`} style={[styles.gridCard, { borderWidth: 0, backgroundColor: "transparent" }]} />
+            ))}
           </View>
 
           {/* Date & Time Field */}
@@ -376,15 +430,13 @@ export default function AddExpenseScreen() {
             <Ionicons name="chevron-down" size={18} color={themeColors.muted} />
           </TouchableOpacity>
 
-          {/* Platform Conditional Native TimePicker */}
-          {showTimePicker && (
-            <DateTimePicker
-              value={date}
-              mode="time"
-              display="default"
-              onChange={onChangeTime}
-            />
-          )}
+          {/* Custom TimePicker */}
+          <CustomTimePicker
+            visible={showTimePicker}
+            onClose={() => setShowTimePicker(false)}
+            onSave={onSaveTime}
+            initialDate={date}
+          />
 
           {/* Note Field */}
           <Text style={[styles.label, { color: themeColors.text }]}>Note (Optional)</Text>
@@ -573,10 +625,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    justifyContent: "space-between",
+    rowGap: 10,
   },
   gridCard: {
-    width: (width - 36 - 16) / 3,
+    width: "31.5%",
     borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 10,

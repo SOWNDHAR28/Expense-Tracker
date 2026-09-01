@@ -1,11 +1,13 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Transaction } from "../types/expense";
 import { useTheme } from "../context/ThemeContext";
 import { getCategoryMeta } from "../constants/categories";
 import { currencyFormatter, formatTime } from "../utils/formatters";
+import * as Haptics from "expo-haptics";
+import { useAppSelector } from "../redux/hooks";
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -20,11 +22,32 @@ export default function ExpenseCard({
 }: TransactionCardProps) {
   const navigation = useNavigation<any>();
   const { themeColors } = useTheme();
-  
+  const scale = useRef(new Animated.Value(1)).current;
+  const customCategories = useAppSelector(state => state.categories.customCategories);
+
   const isIncome = transaction.type === "income";
-  const meta = getCategoryMeta(transaction.category);
+  const meta = getCategoryMeta(transaction.category, customCategories);
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 6,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
 
   const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (onPress) {
       onPress();
     } else {
@@ -37,56 +60,60 @@ export default function ExpenseCard({
     : `-₹${transaction.amount.toLocaleString("en-IN")}`;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        compact && styles.compactCard,
-        { backgroundColor: themeColors.card, borderColor: themeColors.border },
-      ]}
-      activeOpacity={0.8}
-      onPress={handlePress}
-    >
-      <View style={styles.row}>
-        {/* Category Icon */}
-        <View
-          style={[
-            styles.iconWrap,
-            { backgroundColor: `${meta.color}1E` },
-          ]}
-        >
-          <MaterialCommunityIcons
-            name={(meta.icon as any) || "circle"}
-            size={22}
-            color={meta.color}
-          />
-        </View>
-
-        {/* Title and Category */}
-        <View style={styles.textBlock}>
-          <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
-            {transaction.note || transaction.category}
-          </Text>
-          <Text style={[styles.category, { color: themeColors.muted }]}>
-            {transaction.category}
-          </Text>
-        </View>
-
-        {/* Amount and Time */}
-        <View style={styles.rightBlock}>
-          <Text
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[
+          styles.card,
+          compact && styles.compactCard,
+          { backgroundColor: themeColors.card, borderColor: themeColors.border },
+        ]}
+        activeOpacity={1}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={handlePress}
+      >
+        <View style={styles.row}>
+          {/* Category Icon */}
+          <View
             style={[
-              styles.amount,
-              { color: isIncome ? themeColors.income : themeColors.text },
+              styles.iconWrap,
+              { backgroundColor: `${meta.color}1E` },
             ]}
           >
-            {formattedAmount}
-          </Text>
-          <Text style={[styles.time, { color: themeColors.muted }]}>
-            {formatTime(transaction.date)}
-          </Text>
+            <MaterialCommunityIcons
+              name={(meta.icon as any) || "circle"}
+              size={22}
+              color={meta.color}
+            />
+          </View>
+
+          {/* Title and Category */}
+          <View style={styles.textBlock}>
+            <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
+              {transaction.note || transaction.category}
+            </Text>
+            <Text style={[styles.category, { color: themeColors.muted }]}>
+              {transaction.category}
+            </Text>
+          </View>
+
+          {/* Amount and Time */}
+          <View style={styles.rightBlock}>
+            <Text
+              style={[
+                styles.amount,
+                { color: isIncome ? themeColors.income : themeColors.text },
+              ]}
+            >
+              {formattedAmount}
+            </Text>
+            <Text style={[styles.time, { color: themeColors.muted }]}>
+              {formatTime(transaction.date)}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 

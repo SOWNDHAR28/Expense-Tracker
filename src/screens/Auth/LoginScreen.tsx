@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { useAppDispatch } from '../../redux/hooks';
@@ -10,6 +10,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import CustomAlertModal from '../../components/CustomAlertModal';
 import AnimatedButton from '../../components/AnimatedButton';
+import * as Haptics from 'expo-haptics';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -21,6 +22,18 @@ export default function LoginScreen() {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const { themeColors, isDark } = useTheme();
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
 
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
@@ -41,16 +54,17 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) return;
+    if (!email.trim() || !password.trim()) return;
     setLocalLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: email.trim(),
+      password: password.trim(),
     });
 
     if (error) {
       dispatch(setError(error.message));
+      triggerShake();
       showAlert("Login Failed", error.message, "close-circle-outline");
     } else {
       dispatch(setAuth({ user: data.user, session: data.session }));
@@ -121,7 +135,7 @@ export default function LoginScreen() {
           <Text style={[styles.subtitle, { color: themeColors.muted }]}>Log in to sync your expenses</Text>
         </View>
 
-        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <Animated.View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, transform: [{ translateX: shakeAnim }] }]}>
           <TextInput
             style={[styles.input, { backgroundColor: themeColors.card, borderColor: themeColors.border, color: themeColors.text }]}
             placeholder="Email"
@@ -143,7 +157,10 @@ export default function LoginScreen() {
             />
             <TouchableOpacity 
               style={styles.eyeIcon} 
-              onPress={() => setShowPassword(!showPassword)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowPassword(!showPassword);
+              }}
             >
               <Ionicons 
                 name={showPassword ? "eye-off" : "eye"} 
@@ -156,6 +173,7 @@ export default function LoginScreen() {
           <AnimatedButton 
             style={[styles.button, { backgroundColor: themeColors.primary }]} 
             onPress={handleLogin}
+
             disabled={loading}
             hapticFeedback="light"
           >
@@ -165,7 +183,7 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Log In</Text>
             )}
           </AnimatedButton>
-        </View>
+          </Animated.View>
 
         <View style={styles.dividerContainer}>
           <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
