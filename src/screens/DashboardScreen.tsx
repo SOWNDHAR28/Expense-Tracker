@@ -891,7 +891,7 @@ export default function DashboardScreen() {
               </View>
 
               {/* Drawer Content */}
-              <ScrollView contentContainerStyle={styles.drawerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView contentContainerStyle={styles.drawerScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
                 {/* Profile Badge Card */}
                 <View style={[styles.profileCard, { backgroundColor: themeColors.surface }]}>
                   <View style={[styles.userAvatar, { backgroundColor: themeColors.softPurple }]}>

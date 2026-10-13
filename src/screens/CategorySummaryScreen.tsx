@@ -15,7 +15,7 @@ import ExpenseCard from "../components/ExpenseCard";
 import { setCategoryLimit, removeCategoryLimit } from "../redux/slices/budgetSlice";
 import { incomeCategories, PALETTE_COLORS, PALETTE_ICONS } from "../constants/categories";
 import { deleteCustomCategoryFromCloud, updateCustomCategoryInCloud } from "../redux/slices/categorySlice";
-import { TextInput, Modal, TouchableWithoutFeedback } from "react-native";
+import { TextInput, Modal, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import CustomAlertModal from "../components/CustomAlertModal";
 import * as Haptics from "expo-haptics";
@@ -336,8 +336,11 @@ export default function CategorySummaryScreen() {
 
       {/* Set Budget Modal */}
       {!isIncome && (
-        <Modal visible={showBudgetModal} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
+        <Modal visible={showBudgetModal} transparent animationType="fade" onRequestClose={() => setShowBudgetModal(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalOverlay}
+          >
             <TouchableWithoutFeedback onPress={() => setShowBudgetModal(false)}>
               <View style={styles.modalDismissArea} />
             </TouchableWithoutFeedback>
@@ -371,7 +374,7 @@ export default function CategorySummaryScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
 
@@ -382,8 +385,18 @@ export default function CategorySummaryScreen() {
         animationType="slide"
         onRequestClose={() => setShowEditModal(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setShowEditModal(false)}>
-          <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowEditModal(false)}>
+            <View style={styles.modalDismissArea} />
+          </TouchableWithoutFeedback>
+          <ScrollView
+            contentContainerStyle={styles.editModalScroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <TouchableWithoutFeedback>
               <View style={[styles.addModalContent, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
                 <Text style={[styles.addModalTitle, { color: themeColors.text }]}>Edit Category</Text>
@@ -461,8 +474,8 @@ export default function CategorySummaryScreen() {
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Alert Modal Popup */}
@@ -577,6 +590,13 @@ const styles = StyleSheet.create({
   modalDismissArea: {
     position: "absolute",
     top: 0, bottom: 0, left: 0, right: 0,
+  },
+  editModalScroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 20,
   },
   modalContent: {
     borderRadius: 24,

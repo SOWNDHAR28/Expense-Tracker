@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { useAppDispatch } from '../../redux/hooks';
@@ -85,71 +85,78 @@ export default function SignupScreen() {
       style={[styles.container, { backgroundColor: themeColors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={[styles.iconContainer, { backgroundColor: themeColors.softTeal }]}>
-            <Ionicons name="person-add" size={30} color={themeColors.teal} style={{ marginLeft: 4 }} />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <View style={[styles.iconContainer, { backgroundColor: themeColors.softTeal }]}>
+              <Ionicons name="person-add" size={30} color={themeColors.teal} style={{ marginLeft: 4 }} />
+            </View>
+            <Text style={[styles.title, { color: themeColors.primary }]}>Create Account</Text>
+            <Text style={[styles.subtitle, { color: themeColors.muted }]}>Start tracking your expenses securely</Text>
           </View>
-          <Text style={[styles.title, { color: themeColors.primary }]}>Create Account</Text>
-          <Text style={[styles.subtitle, { color: themeColors.muted }]}>Start tracking your expenses securely</Text>
-        </View>
 
-        <Animated.View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, transform: [{ translateX: shakeAnim }] }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: themeColors.card, borderColor: themeColors.border, color: themeColors.text }]}
-            placeholder="Email"
-            placeholderTextColor={themeColors.muted}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          
-          <View style={[styles.passwordContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+          <Animated.View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, transform: [{ translateX: shakeAnim }] }]}>
             <TextInput
-              style={[styles.passwordInput, { color: themeColors.text }]}
-              placeholder="Password"
+              style={[styles.input, { backgroundColor: themeColors.card, borderColor: themeColors.border, color: themeColors.text }]}
+              placeholder="Email"
               placeholderTextColor={themeColors.muted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
             />
-            <TouchableOpacity 
-              style={styles.eyeIcon} 
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowPassword(!showPassword);
-              }}
-            >
-              <Ionicons 
-                name={showPassword ? "eye-off" : "eye"} 
-                size={22} 
-                color={themeColors.muted} 
+            
+            <View style={[styles.passwordContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+              <TextInput
+                style={[styles.passwordInput, { color: themeColors.text }]}
+                placeholder="Password"
+                placeholderTextColor={themeColors.muted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
               />
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowPassword(!showPassword);
+                }}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={22} 
+                  color={themeColors.muted} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <AnimatedButton 
+              style={[styles.button, { backgroundColor: themeColors.primary }]} 
+              onPress={handleSignup}
+              disabled={loading}
+              hapticFeedback="light"
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.buttonText}>Sign Up</Text>
+              )}
+            </AnimatedButton>
+          </Animated.View>
+
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: themeColors.text }]}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Text style={[styles.link, { color: themeColors.primary }]}>Log In</Text>
             </TouchableOpacity>
           </View>
-
-          <AnimatedButton 
-            style={[styles.button, { backgroundColor: themeColors.primary }]} 
-            onPress={handleSignup}
-            disabled={loading}
-            hapticFeedback="light"
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
-            )}
-          </AnimatedButton>
-        </Animated.View>
-
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: themeColors.text }]}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={[styles.link, { color: themeColors.primary }]}>Log In</Text>
-          </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       <CustomAlertModal
         visible={alertConfig.visible}
@@ -170,6 +177,10 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   content: {
     flex: 1,

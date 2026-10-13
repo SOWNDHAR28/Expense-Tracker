@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  ScrollView,
 } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
@@ -50,78 +51,85 @@ export default function AuthScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.container}>
-          {/* Logo & Header */}
-          <View style={styles.header}>
-            <View style={[styles.logoWrap, { backgroundColor: themeColors.softPurple }]}>
-              <MaterialCommunityIcons name="wallet" size={44} color={themeColors.primary} />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.container}>
+            {/* Logo & Header */}
+            <View style={styles.header}>
+              <View style={[styles.logoWrap, { backgroundColor: themeColors.softPurple }]}>
+                <MaterialCommunityIcons name="wallet" size={44} color={themeColors.primary} />
+              </View>
+              <Text style={[styles.appName, { color: themeColors.text }]}>Expense Tracker</Text>
+              <Text style={[styles.tagline, { color: themeColors.muted }]}>
+                Smart & Offline Personal Finance
+              </Text>
             </View>
-            <Text style={[styles.appName, { color: themeColors.text }]}>Expense Tracker</Text>
-            <Text style={[styles.tagline, { color: themeColors.muted }]}>
-              Smart & Offline Personal Finance
-            </Text>
-          </View>
 
-          {/* Card Container */}
-          <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-            {!hasAccount ? (
-              // Onboarding Sign Up Screen
-              <View>
-                <Text style={[styles.formTitle, { color: themeColors.text }]}>Welcome</Text>
-                <Text style={[styles.formSubtitle, { color: themeColors.muted }]}>
-                  Please enter your name to personalize your offline tracker.
-                </Text>
+            {/* Card Container */}
+            <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+              {!hasAccount ? (
+                // Onboarding Sign Up Screen
+                <View>
+                  <Text style={[styles.formTitle, { color: themeColors.text }]}>Welcome</Text>
+                  <Text style={[styles.formSubtitle, { color: themeColors.muted }]}>
+                    Please enter your name to personalize your offline tracker.
+                  </Text>
 
-                {/* Name Input */}
-                <Text style={[styles.label, { color: themeColors.text }]}>Name</Text>
-                <View style={[styles.inputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-                  <MaterialCommunityIcons name="account-outline" size={20} color={themeColors.muted} style={styles.inputIcon} />
-                  <TextInput
-                    value={username}
-                    onChangeText={setUsername}
-                    placeholder="Enter name"
-                    placeholderTextColor={themeColors.muted}
-                    style={[styles.input, { color: themeColors.text }]}
-                    autoCapitalize="words"
-                  />
+                  {/* Name Input */}
+                  <Text style={[styles.label, { color: themeColors.text }]}>Name</Text>
+                  <View style={[styles.inputContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                    <MaterialCommunityIcons name="account-outline" size={20} color={themeColors.muted} style={styles.inputIcon} />
+                    <TextInput
+                      value={username}
+                      onChangeText={setUsername}
+                      placeholder="Enter name"
+                      placeholderTextColor={themeColors.muted}
+                      style={[styles.input, { color: themeColors.text }]}
+                      autoCapitalize="words"
+                    />
+                  </View>
+
+                  {/* Submit Button */}
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: themeColors.primary }]}
+                    onPress={handleCreateAccount}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.primaryText}>Get Started</Text>
+                    <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
                 </View>
+              ) : (
+                // Returning Visit Login Gateway
+                <View style={{ alignItems: "center", paddingVertical: 10 }}>
+                  <Ionicons name="lock-closed-outline" size={54} color={themeColors.primary} style={{ marginBottom: 12 }} />
+                  <Text style={[styles.formTitle, { color: themeColors.text, textAlign: "center" }]}>
+                    App Locked
+                  </Text>
+                  <Text style={[styles.formSubtitle, { color: themeColors.muted, textAlign: "center", marginBottom: 24 }]}>
+                    Tap below to authenticate and access your transactions using your phone's native security lock.
+                  </Text>
 
-                {/* Submit Button */}
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: themeColors.primary }]}
-                  onPress={handleCreateAccount}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.primaryText}>Get Started</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              // Returning Visit Login Gateway
-              <View style={{ alignItems: "center", paddingVertical: 10 }}>
-                <Ionicons name="lock-closed-outline" size={54} color={themeColors.primary} style={{ marginBottom: 12 }} />
-                <Text style={[styles.formTitle, { color: themeColors.text, textAlign: "center" }]}>
-                  App Locked
-                </Text>
-                <Text style={[styles.formSubtitle, { color: themeColors.muted, textAlign: "center", marginBottom: 24 }]}>
-                  Tap below to authenticate and access your transactions using your phone's native security lock.
-                </Text>
-
-                {/* Unlock Button */}
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: themeColors.primary, width: "100%" }]}
-                  onPress={handleUnlock}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="finger-print-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryText}>Tap to Unlock</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                  {/* Unlock Button */}
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: themeColors.primary, width: "100%" }]}
+                    onPress={handleUnlock}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="finger-print-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryText}>Tap to Unlock</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -130,6 +138,10 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   keyboardView: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
     justifyContent: "center",

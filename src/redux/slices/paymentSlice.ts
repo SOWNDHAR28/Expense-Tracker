@@ -9,10 +9,10 @@ export type PaymentMethod = {
 };
 
 export const defaultPaymentMethods: PaymentMethod[] = [
+  { id: 'pm_gpay', label: 'GPay', icon: 'google', color: '#4285F4', isDefault: true },
   { id: 'pm_cash', label: 'Cash', icon: 'cash', color: '#2ECC71', isDefault: true },
-  { id: 'pm_gpay', label: 'Gpay', icon: 'google', color: '#4285F4', isDefault: true },
-  { id: 'pm_credit', label: 'Credit Card', icon: 'credit-card-outline', color: '#9B59B6', isDefault: true },
   { id: 'pm_debit', label: 'Debit Card', icon: 'credit-card', color: '#F39C12', isDefault: true },
+  { id: 'pm_credit', label: 'Credit Card', icon: 'credit-card-outline', color: '#9B59B6', isDefault: true },
 ];
 
 export interface PaymentState {

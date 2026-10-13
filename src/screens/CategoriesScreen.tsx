@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   Platform,
   Animated,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -425,8 +426,19 @@ export default function CategoriesScreen() {
         animationType="fade"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setShowAddModal(false)}>
-          <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowAddModal(false)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ flexGrow: 0 }}
+          >
             <TouchableWithoutFeedback>
               <View style={[styles.modalContent, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
                 <View style={styles.modalHeader}>
@@ -511,8 +523,8 @@ export default function CategoriesScreen() {
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Alert Modal Popup */}
