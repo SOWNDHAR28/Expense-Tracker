@@ -6,6 +6,7 @@ import transactionReducer from './slices/transactionSlice';
 import paymentReducer from './slices/paymentSlice';
 import budgetReducer from './slices/budgetSlice';
 import categoryReducer from './slices/categorySlice';
+import loanReducer from './slices/loanSlice';
 
 const persistConfig = {
   key: 'root',
@@ -18,6 +19,7 @@ const rootReducer = combineReducers({
   payments: paymentReducer,
   budgets: budgetReducer,
   categories: categoryReducer,
+  loans: loanReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

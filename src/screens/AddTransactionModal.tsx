@@ -4,12 +4,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
+import { LENT_BORROWED_ENABLED } from "../constants/featureFlags";
 
 export default function AddTransactionModal() {
   const navigation = useNavigation<any>();
@@ -70,6 +71,25 @@ export default function AddTransactionModal() {
               Add money you spent
             </Text>
           </TouchableOpacity>
+
+          {/* Option 3: Lent / Borrowed — feature-flagged */}
+          {LENT_BORROWED_ENABLED && (
+            <TouchableOpacity
+              style={[styles.optionCard, { backgroundColor: "#EEF2FF", borderColor: "#6C5CE733" }]}
+              activeOpacity={0.85}
+              onPress={() => {
+                navigation.replace("AddLoan");
+              }}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: "#6C5CE7" }]}>
+                <MaterialCommunityIcons name="handshake-outline" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.cardTitle, { color: themeColors.text }]}>Lent / Borrowed</Text>
+              <Text style={[styles.cardSubtitle, { color: themeColors.muted }]}>
+                Track money lent or borrowed
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -81,7 +101,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    paddingTop: Platform.OS === "ios" ? 64 : 48, // Bring down to clear notches and align lower
+    paddingTop: Platform.OS === "ios" ? 64 : 48,
   },
   centerContent: {
     flex: 1,
@@ -114,7 +134,7 @@ const styles = StyleSheet.create({
   },
   optionCard: {
     borderRadius: 20,
-    paddingVertical: 18, // Shrunk from 32 to 18 to make cards neat and compact
+    paddingVertical: 18,
     paddingHorizontal: 20,
     alignItems: "center",
     justifyContent: "center",
@@ -122,7 +142,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   iconCircle: {
-    width: 48, // Shrunk icon circle size from 60 to 48
+    width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: "center",
@@ -130,12 +150,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardTitle: {
-    fontSize: 17, // Smaller title font size
+    fontSize: 17,
     fontWeight: "800",
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12, // Smaller subtitle font size
+    fontSize: 12,
     fontWeight: "500",
   },
 });

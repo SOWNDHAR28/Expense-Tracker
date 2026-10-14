@@ -8,12 +8,17 @@ import AddExpenseScreen from "../screens/AddExpenseScreen";
 import CategoriesScreen from "../screens/CategoriesScreen";
 import TransactionDetailsScreen from "../screens/TransactionDetailsScreen";
 import CategorySummaryScreen from "../screens/CategorySummaryScreen";
+import AddLoanScreen from "../screens/AddLoanScreen";
+import PersonLedgerScreen from "../screens/PersonLedgerScreen";
+import AddRepaymentScreen from "../screens/AddRepaymentScreen";
+import LoansScreen from "../screens/LoansScreen";
 
 import LoginScreen from "../screens/Auth/LoginScreen";
 import SignupScreen from "../screens/Auth/SignupScreen";
 
 import { ActivityIndicator, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +59,10 @@ export default function RootNavigator() {
           <Stack.Screen name="Categories" component={CategoriesScreen} />
           <Stack.Screen name="TransactionDetails" component={TransactionDetailsScreen} />
           <Stack.Screen name="CategorySummary" component={CategorySummaryScreen} />
+          <Stack.Screen name="AddLoan" component={AddLoanScreen} />
+          <Stack.Screen name="PersonLedger" component={PersonLedgerScreen} />
+          <Stack.Screen name="AddRepayment" component={AddRepaymentScreen} />
+          <Stack.Screen name="Loans" component={LoansScreen} />
         </>
       )}
     </Stack.Navigator>

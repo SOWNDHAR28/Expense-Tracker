@@ -1,4 +1,4 @@
-export type TransactionType = "income" | "expense";
+export type TransactionType = "income" | "expense" | "lent_borrowed";
 
 export interface Transaction {
   id: string;
@@ -12,6 +12,10 @@ export interface Transaction {
   createdAt: string;
   updatedAt: string;
   sync_status?: 'synced' | 'pending' | 'error';
+  loanDirection?: 'lent' | 'borrowed';
+  loanStatus?: 'open' | 'partial' | 'settled' | 'written_off';
+  personName?: string;
+  loanId?: string;
 }
 
 export interface TransactionDraft {

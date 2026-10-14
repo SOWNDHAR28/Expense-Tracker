@@ -16,7 +16,7 @@ import {
   Switch,
   RefreshControl,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAppSelector, useAppDispatch } from "../redux/hooks";
@@ -24,6 +24,9 @@ import { formatPercent } from "../utils/format";
 import { clearAuth } from '../redux/slices/authSlice';
 import { fetchTransactions } from '../redux/slices/transactionSlice';
 import { fetchCustomCategories } from '../redux/slices/categorySlice';
+import { fetchLoans, fetchPersons, selectLoanSummary } from '../redux/slices/loanSlice';
+import { computeExpenseTotal, computeIncomeTotal, filterOrdinaryTransactions } from '../utils/accounting';
+import { LENT_BORROWED_ENABLED } from '../constants/featureFlags';
 import { useTheme, ThemeMode } from "../context/ThemeContext";
 import ExpenseCard from "../components/ExpenseCard";
 import { expenseCategories, incomeCategories } from "../constants/categories";
@@ -34,10 +37,11 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { setDeviceLockEnabled } from '../redux/slices/authSlice';
 import * as Haptics from 'expo-haptics';
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 export default function DashboardScreen() {
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
   const transactions = useAppSelector(state => state.transactions.items);
   const loading = useAppSelector((state) => state.transactions.loading);
   const budgetLimits = useAppSelector((state) => state.budgets.limits);
@@ -45,7 +49,7 @@ export default function DashboardScreen() {
   const username = user?.email?.split('@')[0] || "User";
 
   // Compute stats locally instead of using context
-  const recentTransactions = transactions.slice(0, 5);
+  const recentTransactions = filterOrdinaryTransactions(transactions).slice(0, 5);
   
   const currentMonthTx = useMemo(() => {
     const now = new Date();
@@ -55,9 +59,16 @@ export default function DashboardScreen() {
     });
   }, [transactions]);
 
-  const incomeTotal = currentMonthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const expenseTotal = currentMonthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const incomeTotal = computeIncomeTotal(currentMonthTx);
+  const expenseTotal = computeExpenseTotal(currentMonthTx);
   const netBalance = incomeTotal - expenseTotal;
+
+  // Lent / Borrowed summary
+  const loans = useAppSelector(state => (state as any).loans?.loans ?? []);
+  const loanSummary = selectLoanSummary(loans);
+  const openLoans = LENT_BORROWED_ENABLED
+    ? loans.filter((l: any) => l.status !== 'settled' && l.status !== 'written_off')
+    : [];
 
   const { themeColors, isDark, themeMode, setThemeMode } = useTheme();
   
@@ -332,54 +343,90 @@ export default function DashboardScreen() {
       .sort((a, b) => b.lastUpdated - a.lastUpdated); // Sort by most recent
   }, [currentMonthTx, expenseCategories, incomeCategories, customCategories, expenseTotal, incomeTotal]);
 
-  // Left Drawer (Menu & Settings)
+  // Left Bottom Sheet (Menu & Settings)
   const [leftDrawerVisible, setLeftDrawerVisible] = useState(false);
   const [showThemeOptions, setShowThemeOptions] = useState(false);
   const [showAboutOptions, setShowAboutOptions] = useState(false);
-  const leftSlideAnim = useRef(new Animated.Value(-width)).current;
+  const leftSlideAnim = useRef(new Animated.Value(height || 800)).current;
+  const leftBackdropAnim = useRef(new Animated.Value(0)).current;
 
   const openLeftDrawer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLeftDrawerVisible(true);
-    Animated.timing(leftSlideAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start();
+    leftSlideAnim.setValue(height || 800);
+    Animated.parallel([
+      Animated.timing(leftBackdropAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.spring(leftSlideAnim, {
+        toValue: 0,
+        damping: 28,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const closeLeftDrawer = () => {
-    Animated.timing(leftSlideAnim, {
-      toValue: -width,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(leftBackdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(leftSlideAnim, {
+        toValue: height || 800,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setLeftDrawerVisible(false);
       setShowThemeOptions(false);
       setShowAboutOptions(false);
     });
   };
 
-  // Right Drawer (Profile & Logout)
+  // Right Bottom Sheet (Profile & Security)
   const [rightDrawerVisible, setRightDrawerVisible] = useState(false);
-  const rightSlideAnim = useRef(new Animated.Value(width)).current;
+  const rightSlideAnim = useRef(new Animated.Value(height || 800)).current;
+  const rightBackdropAnim = useRef(new Animated.Value(0)).current;
 
   const openRightDrawer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRightDrawerVisible(true);
-    Animated.timing(rightSlideAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start();
+    rightSlideAnim.setValue(height || 800);
+    Animated.parallel([
+      Animated.timing(rightBackdropAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.spring(rightSlideAnim, {
+        toValue: 0,
+        damping: 28,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const closeRightDrawer = () => {
-    Animated.timing(rightSlideAnim, {
-      toValue: width,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(rightBackdropAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rightSlideAnim, {
+        toValue: height || 800,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setRightDrawerVisible(false);
     });
   };
@@ -413,10 +460,15 @@ export default function DashboardScreen() {
     themeMode === "system" ? "System" : themeMode === "dark" ? "Dark" : "Light";
 
   const onRefresh = async () => {
-    await Promise.all([
+    const promises: Promise<any>[] = [
       dispatch(fetchTransactions()),
       dispatch(fetchCustomCategories()),
-    ]);
+    ];
+    if (LENT_BORROWED_ENABLED) {
+      promises.push(dispatch(fetchLoans(undefined)));
+      promises.push(dispatch(fetchPersons()));
+    }
+    await Promise.all(promises);
   };
 
   return (
@@ -504,6 +556,132 @@ export default function DashboardScreen() {
             <Text style={[styles.statSub, { color: themeColors.muted }]}>This Month</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Disclaimer: loans excluded from income/expense totals */}
+        {LENT_BORROWED_ENABLED && (
+          <Text style={[styles.loansDisclaimer, { color: themeColors.muted }]}>
+            Loans and repayments are not included above.
+          </Text>
+        )}
+
+        {/* Lent / Borrowed Summary Card */}
+        {LENT_BORROWED_ENABLED && (
+          <View style={[styles.loanSummaryCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            {/* Card header */}
+            <View style={styles.loanCardHeader}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate("Loans")}
+              >
+                <View style={[styles.loanCardIconCircle, { backgroundColor: '#EEF2FF' }]}>
+                  <MaterialCommunityIcons name="handshake-outline" size={20} color="#6C5CE7" />
+                </View>
+                <Text style={[styles.loanCardTitle, { color: themeColors.text }]}>Lent / Borrowed</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("AddLoan")}
+                style={[styles.loanAddBtn, { backgroundColor: '#6C5CE7' }]}
+              >
+                <MaterialCommunityIcons name="plus" size={14} color="#fff" />
+                <Text style={styles.loanAddBtnText}>New</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* To receive / To pay row */}
+            <View style={styles.loanStatsRow}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Loans", { initialTab: "lent" })}
+                style={[styles.loanStatBox, { backgroundColor: '#EAF8EF', borderColor: '#2EAA5A22' }]}
+              >
+                <Text style={[styles.loanStatLabel, { color: '#2EAA5A' }]}>To receive</Text>
+                <Text style={[styles.loanStatValue, { color: '#2EAA5A' }]}>
+                  ₹{loanSummary.totalToReceive.toLocaleString('en-IN')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Loans", { initialTab: "borrowed" })}
+                style={[styles.loanStatBox, { backgroundColor: '#FDECEC', borderColor: '#E0534522' }]}
+              >
+                <Text style={[styles.loanStatLabel, { color: '#E05345' }]}>To pay</Text>
+                <Text style={[styles.loanStatValue, { color: '#E05345' }]}>
+                  ₹{loanSummary.totalToPay.toLocaleString('en-IN')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Open loans list */}
+            {openLoans.length === 0 ? (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate("Loans")}
+                style={styles.loanEmptyRow}
+              >
+                <MaterialCommunityIcons name="check-circle-outline" size={18} color="#2EAA5A" />
+                <Text style={[styles.loanEmptyText, { color: themeColors.muted }]}>
+                  No open loans
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                {openLoans.slice(0, 4).map((loan: any) => (
+                  <TouchableOpacity
+                    key={loan.id}
+                    style={[styles.loanPersonRow, { borderTopColor: themeColors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (loan.person_id) {
+                        navigation.navigate("PersonLedger", { personId: loan.person_id, personName: loan.person_name });
+                      } else {
+                        navigation.navigate("Loans");
+                      }
+                    }}
+                  >
+                    <View style={[styles.loanPersonAvatar, {
+                      backgroundColor: loan.direction === 'lent' ? '#EAF8EF' : '#FDECEC'
+                    }]}>
+                      <Text style={[styles.loanPersonAvatarText, {
+                        color: loan.direction === 'lent' ? '#2EAA5A' : '#E05345'
+                      }]}>
+                        {(loan.person_name || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.loanPersonName, { color: themeColors.text }]}>
+                        {loan.person_name || 'Unknown'}
+                      </Text>
+                      <Text style={[styles.loanPersonSub, { color: themeColors.muted }]}>
+                        {loan.direction === 'lent' ? 'You lent' : 'You borrowed'}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.loanPersonAmount, {
+                        color: loan.direction === 'lent' ? '#2EAA5A' : '#E05345'
+                      }]}>
+                        ₹{(loan.pending_balance ?? loan.amount).toLocaleString('en-IN')}
+                      </Text>
+                      <Text style={[styles.loanPersonStatus, { color: themeColors.muted }]}>
+                        {loan.status}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {openLoans.length > 4 && (
+                  <TouchableOpacity
+                    style={styles.loanViewAllRow}
+                    onPress={() => navigation.navigate("Loans")}
+                  >
+                    <Text style={[styles.loanViewAllText, { color: '#6C5CE7' }]}>
+                      View all {openLoans.length} open loans →
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        )}
 
         {/* Recent Transactions Section */}
         <View style={[styles.sectionHeader, { marginTop: 22 }]}>
@@ -593,40 +771,65 @@ export default function DashboardScreen() {
         )}
       </ScrollView>
 
-      {/* Left Slide-out Settings Drawer */}
+      {/* Left Bottom Sheet (Settings & Preferences) */}
       <Modal
         visible={leftDrawerVisible}
         transparent={true}
         onRequestClose={closeLeftDrawer}
         animationType="none"
+        statusBarTranslucent={true}
       >
         <View style={styles.modalOverlay}>
-          {/* Backdrop Touch to Close */}
+          {/* Darkened Backdrop Touch to Close */}
           <TouchableWithoutFeedback onPress={closeLeftDrawer}>
-            <View style={styles.backdrop} />
+            <Animated.View style={[styles.darkenedBackdrop, { opacity: leftBackdropAnim }]} />
           </TouchableWithoutFeedback>
 
-          {/* Left Drawer Menu Panel */}
+          {/* Bottom Sheet Panel */}
           <Animated.View
             style={[
-              styles.drawerPanel,
+              styles.bottomSheetPanel,
               {
                 backgroundColor: themeColors.card,
-                borderRightColor: themeColors.border,
-                transform: [{ translateX: leftSlideAnim }],
+                borderColor: themeColors.border,
+                maxHeight: Math.min(height * 0.85, 680),
+                transform: [{ translateY: leftSlideAnim }],
               },
             ]}
           >
-            <View style={{ flex: 1, paddingTop: Platform.OS === "ios" ? 44 : 20 }}>
-              {/* Drawer Header */}
-              <View style={[styles.drawerHeader, { borderBottomColor: themeColors.border, paddingBottom: 16 }]}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: themeColors.primary, textAlign: "center" }}>
-                  Expense Tracker
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandleContainer}>
+              <View style={[styles.sheetHandle, { backgroundColor: themeColors.border }]} />
+            </View>
+
+            {/* Sheet Header */}
+            <View style={[styles.sheetHeader, { borderBottomColor: themeColors.border }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={[styles.sheetHeaderIconCircle, { backgroundColor: themeColors.softPurple }]}>
+                  <Ionicons name="settings-outline" size={17} color={themeColors.primary} />
+                </View>
+                <Text style={[styles.sheetTitle, { color: themeColors.text }]}>
+                  Settings & Preferences
                 </Text>
               </View>
+              <TouchableOpacity
+                onPress={closeLeftDrawer}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={[styles.sheetCloseBtn, { backgroundColor: themeColors.surface }]}
+              >
+                <Ionicons name="close" size={18} color={themeColors.muted} />
+              </TouchableOpacity>
+            </View>
 
-              {/* Drawer Menu Items */}
-              <ScrollView contentContainerStyle={styles.drawerScroll} showsVerticalScrollIndicator={false}>
+            {/* Sheet Menu Items */}
+            <ScrollView
+              contentContainerStyle={[
+                styles.drawerScroll,
+                { paddingBottom: Math.max(insets.bottom, 16) + 24 }
+              ]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
                 {/* 1. Theme Switcher */}
                 <TouchableOpacity
                   style={[styles.menuItem, { borderBottomColor: themeColors.border, borderBottomWidth: 1 }]}
@@ -852,46 +1055,70 @@ export default function DashboardScreen() {
 
 
               </ScrollView>
-            </View>
           </Animated.View>
         </View>
       </Modal>
 
-      {/* Right Slide-out Profile Drawer */}
+      {/* Right Bottom Sheet (Profile & Security) */}
       <Modal
         visible={rightDrawerVisible}
         transparent={true}
         onRequestClose={closeRightDrawer}
         animationType="none"
+        statusBarTranslucent={true}
       >
         <View style={styles.modalOverlay}>
-          {/* Backdrop Touch to Close */}
+          {/* Darkened Backdrop Touch to Close */}
           <TouchableWithoutFeedback onPress={closeRightDrawer}>
-            <View style={styles.backdrop} />
+            <Animated.View style={[styles.darkenedBackdrop, { opacity: rightBackdropAnim }]} />
           </TouchableWithoutFeedback>
 
-          {/* Right Drawer Profile Panel */}
+          {/* Bottom Sheet Panel */}
           <Animated.View
             style={[
-              styles.drawerPanel,
-              styles.rightDrawerPanel,
+              styles.bottomSheetPanel,
               {
                 backgroundColor: themeColors.card,
-                borderLeftColor: themeColors.border,
-                transform: [{ translateX: rightSlideAnim }],
+                borderColor: themeColors.border,
+                maxHeight: Math.min(height * 0.85, 620),
+                transform: [{ translateY: rightSlideAnim }],
               },
             ]}
           >
-            <View style={{ flex: 1, paddingTop: Platform.OS === "ios" ? 44 : 20 }}>
-              {/* Drawer Header */}
-              <View style={[styles.drawerHeader, { borderBottomColor: themeColors.border, paddingBottom: 16 }]}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: themeColors.primary, textAlign: "center" }}>
-                  Profile Info
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandleContainer}>
+              <View style={[styles.sheetHandle, { backgroundColor: themeColors.border }]} />
+            </View>
+
+            {/* Sheet Header */}
+            <View style={[styles.sheetHeader, { borderBottomColor: themeColors.border }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={[styles.sheetHeaderIconCircle, { backgroundColor: themeColors.softPurple }]}>
+                  <Ionicons name="person-outline" size={17} color={themeColors.primary} />
+                </View>
+                <Text style={[styles.sheetTitle, { color: themeColors.text }]}>
+                  Profile & Security
                 </Text>
               </View>
+              <TouchableOpacity
+                onPress={closeRightDrawer}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={[styles.sheetCloseBtn, { backgroundColor: themeColors.surface }]}
+              >
+                <Ionicons name="close" size={18} color={themeColors.muted} />
+              </TouchableOpacity>
+            </View>
 
-              {/* Drawer Content */}
-              <ScrollView contentContainerStyle={styles.drawerScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+            {/* Sheet Content */}
+            <ScrollView
+              contentContainerStyle={[
+                styles.drawerScroll,
+                { paddingBottom: Math.max(insets.bottom, 16) + 24 }
+              ]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
                 {/* Profile Badge Card */}
                 <View style={[styles.profileCard, { backgroundColor: themeColors.surface }]}>
                   <View style={[styles.userAvatar, { backgroundColor: themeColors.softPurple }]}>
@@ -960,7 +1187,6 @@ export default function DashboardScreen() {
                   <Text style={[styles.logoutText, { color: themeColors.expense }]}>Logout</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -1271,10 +1497,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
   },
-  /* Modal Drawer Styles */
+  /* Bottom Modal Sheet Styles */
   modalOverlay: {
     flex: 1,
-    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  darkenedBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
   },
   calendarModalOverlay: {
     flex: 1,
@@ -1283,40 +1517,62 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  backdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-  },
-  drawerPanel: {
-    width: 290,
-    height: "100%",
-    borderRightWidth: 1,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 4, height: 0 },
-    elevation: 10,
-    position: "absolute",
-    left: 0,
-  },
-  rightDrawerPanel: {
-    left: undefined,
-    right: 0,
-    borderRightWidth: 0,
+  bottomSheetPanel: {
+    width: "100%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
     borderLeftWidth: 1,
-    shadowOffset: { width: -4, height: 0 },
+    borderRightWidth: 1,
+    borderBottomWidth: 0,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 24,
   },
-  drawerHeader: {
-    paddingBottom: 20,
+  sheetHandleContainer: {
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 4.5,
+    borderRadius: 3,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    paddingTop: 4,
     borderBottomWidth: 1,
   },
+  sheetHeaderIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  sheetCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   drawerScroll: {
-    paddingVertical: 18,
+    paddingHorizontal: 20,
+    paddingTop: 14,
   },
   menuItem: {
     flexDirection: "row",
@@ -1506,6 +1762,156 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   dayText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  // --- Loan Summary Card styles ---
+  loansDisclaimer: {
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 10,
+    opacity: 0.7,
+  },
+  loanSummaryCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  loanCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  loanCardIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loanCardTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  loanHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  loanViewAllHeaderBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  loanViewAllHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  loanAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  loanAddBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  loanHistoryLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  loanHistoryLinkText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  loanStatsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  loanStatBox: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+  },
+  loanStatLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    opacity: 0.8,
+    marginBottom: 4,
+  },
+  loanStatValue: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  loanEmptyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 14,
+    paddingTop: 0,
+    paddingBottom: 16,
+  },
+  loanEmptyText: {
+    fontSize: 13,
+  },
+  loanPersonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  loanPersonAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loanPersonAvatarText: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  loanPersonName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  loanPersonSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  loanPersonAmount: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  loanPersonStatus: {
+    fontSize: 10,
+    marginTop: 2,
+    textTransform: "capitalize",
+  },
+  loanViewAllRow: {
+    padding: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#EFF2F7",
+    alignItems: "center",
+  },
+  loanViewAllText: {
     fontSize: 13,
     fontWeight: "700",
   },

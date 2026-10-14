@@ -7,18 +7,28 @@ import AnimatedButton from "./AnimatedButton";
 
 interface CustomTimePickerProps {
   visible: boolean;
-  onClose: () => void;
-  onSave: (date: Date) => void;
-  initialDate: Date;
+  onClose?: () => void;
+  onSave?: (date: Date) => void;
+  onConfirm?: (date: Date) => void;
+  onCancel?: () => void;
+  initialDate?: Date;
+  currentDate?: Date;
 }
 
 export default function CustomTimePicker({
   visible,
   onClose,
   onSave,
+  onConfirm,
+  onCancel,
   initialDate,
+  currentDate,
 }: CustomTimePickerProps) {
   const { themeColors } = useTheme();
+
+  const effectiveClose = onClose || onCancel || (() => {});
+  const effectiveSave = onSave || onConfirm || (() => {});
+  const baseDate = initialDate || currentDate || new Date();
 
   // Local state for the selected time parts
   const [hours, setHours] = useState(12);
@@ -28,13 +38,14 @@ export default function CustomTimePicker({
   // Initialize state when modal opens
   useEffect(() => {
     if (visible) {
-      const h = initialDate.getHours();
-      const m = initialDate.getMinutes();
+      const validDate = baseDate instanceof Date && !isNaN(baseDate.getTime()) ? baseDate : new Date();
+      const h = validDate.getHours();
+      const m = validDate.getMinutes();
       setHours(h % 12 || 12);
       setMinutes(m);
       setIsPM(h >= 12);
     }
-  }, [visible, initialDate]);
+  }, [visible, baseDate]);
 
   const triggerHaptic = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -67,7 +78,7 @@ export default function CustomTimePicker({
 
   const handleSave = () => {
     triggerHaptic();
-    const newDate = new Date(initialDate);
+    const newDate = new Date(baseDate);
     
     let finalHours = hours;
     if (isPM && finalHours !== 12) {
@@ -77,7 +88,7 @@ export default function CustomTimePicker({
     }
 
     newDate.setHours(finalHours, minutes, 0, 0);
-    onSave(newDate);
+    effectiveSave(newDate);
   };
 
   // Format to 2 digits (e.g. 05 instead of 5)
@@ -85,7 +96,7 @@ export default function CustomTimePicker({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback onPress={effectiveClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
@@ -153,7 +164,7 @@ export default function CustomTimePicker({
                   style={[styles.actionBtn, { backgroundColor: themeColors.background }]}
                   onPress={() => {
                     triggerHaptic();
-                    onClose();
+                    effectiveClose();
                   }}
                 >
                   <Text style={[styles.actionBtnText, { color: themeColors.text }]}>Cancel</Text>

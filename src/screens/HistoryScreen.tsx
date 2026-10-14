@@ -18,6 +18,7 @@ import { fetchTransactions } from "../redux/slices/transactionSlice";
 import { useTheme } from "../context/ThemeContext";
 import { Transaction } from "../types/expense";
 import ExpenseCard from "../components/ExpenseCard";
+import { computeIncomeTotal, computeExpenseTotal, isOrdinaryTransaction } from "../utils/accounting";
 import * as Haptics from "expo-haptics";
 
 type FilterTab = "All" | "Income" | "Expense";
@@ -44,9 +45,11 @@ export default function HistoryScreen() {
       tx.amount.toString().includes(q);
 
     const matchesType =
-      activeTab === "All" ||
-      (activeTab === "Income" && tx.type === "income") ||
-      (activeTab === "Expense" && tx.type === "expense");
+      activeTab === "All"
+        ? isOrdinaryTransaction(tx)
+        : activeTab === "Income"
+        ? tx.type === "income"
+        : tx.type === "expense";
 
     return matchesSearch && matchesType;
   });
@@ -89,8 +92,8 @@ export default function HistoryScreen() {
   }, {});
 
   const getDailyTotal = (items: Transaction[]) => {
-    const income = items.filter((i) => i.type === "income").reduce((s, i) => s + i.amount, 0);
-    const expense = items.filter((i) => i.type === "expense").reduce((s, i) => s + i.amount, 0);
+    const income = computeIncomeTotal(items);
+    const expense = computeExpenseTotal(items);
     const diff = income - expense;
     return diff >= 0 ? `+₹${diff.toLocaleString("en-IN")}` : `-₹${Math.abs(diff).toLocaleString("en-IN")}`;
   };

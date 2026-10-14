@@ -5,30 +5,16 @@ import { CategoryItem } from "../constants/categories";
 
 const DB_NAME = "expense_tracker.db";
 
-// Open the database synchronously
-let db: SQLite.SQLiteDatabase;
-try {
-  db = SQLite.openDatabaseSync(DB_NAME);
-} catch (error) {
-  console.error("Failed to open SQLite database:", error);
-  throw error;
-}
-
-// Initialize tables and run migration in background
-export async function initializeDatabase(): Promise<void> {
+function initSchemaSync(database: SQLite.SQLiteDatabase) {
   try {
-    // 1. Create Users Table (using id = 1 as single user profile row)
-    db.execSync(`
+    database.execSync(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         pin TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
-    `);
 
-    // 2. Create Transactions Table
-    db.execSync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -40,10 +26,7 @@ export async function initializeDatabase(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
-    `);
 
-    // 3. Create Custom Categories Table
-    db.execSync(`
       CREATE TABLE IF NOT EXISTS custom_categories (
         id TEXT PRIMARY KEY,
         label TEXT NOT NULL,
@@ -51,12 +34,62 @@ export async function initializeDatabase(): Promise<void> {
         color TEXT NOT NULL,
         type TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS persons (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        phone TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS loans (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        note TEXT,
+        payment_method TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        written_off_expense_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS repayments (
+        id TEXT PRIMARY KEY,
+        loan_id TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        payment_method TEXT NOT NULL,
+        note TEXT,
+        idempotency_key TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
     `);
+  } catch (error) {
+    console.error("Failed to execute SQLite schema setup:", error);
+  }
+}
 
-    // 4. Seeding of July & August 2026 disabled to keep a clean zero starting point
-    // seedTestData();
+// Open the database synchronously
+let db: SQLite.SQLiteDatabase;
+try {
+  db = SQLite.openDatabaseSync(DB_NAME);
+  initSchemaSync(db);
+} catch (error) {
+  console.error("Failed to open SQLite database:", error);
+  throw error;
+}
 
-    // 5. Migrate data from AsyncStorage if applicable
+// Initialize tables and run migration in background
+export async function initializeDatabase(): Promise<void> {
+  try {
+    initSchemaSync(db);
+    // Migrate data from AsyncStorage if applicable
     await migrateFromAsyncStorage();
   } catch (error) {
     console.error("Database initialization failed:", error);
@@ -384,11 +417,167 @@ export const dbService = {
     db.runSync("DELETE FROM transactions;");
   },
 
+  // --- Persons Queries ---
+  getPersons(): any[] {
+    try {
+      return db.getAllSync<any>("SELECT * FROM persons ORDER BY name ASC;");
+    } catch (e) {
+      return [];
+    }
+  },
+
+  insertPerson(person: { id: string; user_id?: string; name: string; phone?: string | null; created_at: string; updated_at: string }): void {
+    try {
+      db.runSync(
+        "INSERT OR REPLACE INTO persons (id, user_id, name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
+        person.id,
+        person.user_id || "",
+        person.name,
+        person.phone || null,
+        person.created_at,
+        person.updated_at
+      );
+    } catch (e) {
+      console.warn("SQLite insertPerson first attempt failed, re-initializing schema:", e);
+      try {
+        initSchemaSync(db);
+        db.runSync(
+          "INSERT OR REPLACE INTO persons (id, user_id, name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);",
+          person.id,
+          person.user_id || "",
+          person.name,
+          person.phone || null,
+          person.created_at,
+          person.updated_at
+        );
+      } catch (retryErr) {
+        console.error("SQLite insertPerson retry failed:", retryErr);
+      }
+    }
+  },
+
+  // --- Loans Queries ---
+  getLoans(): any[] {
+    try {
+      return db.getAllSync<any>("SELECT * FROM loans ORDER BY date DESC;");
+    } catch (e) {
+      return [];
+    }
+  },
+
+  insertLoan(loan: any): void {
+    try {
+      db.runSync(
+        `INSERT OR REPLACE INTO loans 
+        (id, user_id, person_id, direction, amount, date, note, payment_method, status, written_off_expense_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        loan.id,
+        loan.user_id || "",
+        loan.person_id,
+        loan.direction,
+        loan.amount,
+        loan.date,
+        loan.note || null,
+        loan.payment_method,
+        loan.status || "open",
+        loan.written_off_expense_id || null,
+        loan.created_at,
+        loan.updated_at
+      );
+    } catch (e) {
+      console.warn("SQLite insertLoan first attempt failed, re-initializing schema:", e);
+      try {
+        initSchemaSync(db);
+        db.runSync(
+          `INSERT OR REPLACE INTO loans 
+          (id, user_id, person_id, direction, amount, date, note, payment_method, status, written_off_expense_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          loan.id,
+          loan.user_id || "",
+          loan.person_id,
+          loan.direction,
+          loan.amount,
+          loan.date,
+          loan.note || null,
+          loan.payment_method,
+          loan.status || "open",
+          loan.written_off_expense_id || null,
+          loan.created_at,
+          loan.updated_at
+        );
+      } catch (retryErr) {
+        console.error("SQLite insertLoan retry failed:", retryErr);
+      }
+    }
+  },
+
+  updateLoanStatus(id: string, status: string, writtenOffExpenseId?: string): void {
+    try {
+      db.runSync(
+        "UPDATE loans SET status = ?, written_off_expense_id = ?, updated_at = ? WHERE id = ?;",
+        status,
+        writtenOffExpenseId || null,
+        new Date().toISOString(),
+        id
+      );
+    } catch (e) {
+      console.error("SQLite updateLoanStatus error:", e);
+    }
+  },
+
+  // --- Repayments Queries ---
+  getRepayments(): any[] {
+    try {
+      return db.getAllSync<any>("SELECT * FROM repayments ORDER BY date ASC;");
+    } catch (e) {
+      return [];
+    }
+  },
+
+  insertRepayment(r: any): void {
+    try {
+      db.runSync(
+        `INSERT OR REPLACE INTO repayments (id, loan_id, amount, date, payment_method, note, idempotency_key, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        r.id,
+        r.loan_id,
+        r.amount,
+        r.date,
+        r.payment_method,
+        r.note || null,
+        r.idempotency_key,
+        r.created_at
+      );
+    } catch (e) {
+      console.warn("SQLite insertRepayment first attempt failed, re-initializing schema:", e);
+      try {
+        initSchemaSync(db);
+        db.runSync(
+          `INSERT OR REPLACE INTO repayments (id, loan_id, amount, date, payment_method, note, idempotency_key, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+          r.id,
+          r.loan_id,
+          r.amount,
+          r.date,
+          r.payment_method,
+          r.note || null,
+          r.idempotency_key,
+          r.created_at
+        );
+      } catch (retryErr) {
+        console.error("SQLite insertRepayment retry failed:", retryErr);
+      }
+    }
+  },
+
   clearAllData(): void {
     try {
       db.runSync("DELETE FROM transactions;");
       db.runSync("DELETE FROM custom_categories;");
       db.runSync("DELETE FROM users;");
+      db.runSync("DELETE FROM persons;");
+      db.runSync("DELETE FROM loans;");
+      db.runSync("DELETE FROM repayments;");
       AsyncStorage.removeItem("sqlite_migration_complete_v2");
       AsyncStorage.removeItem("et_auth_v1");
       AsyncStorage.removeItem("et_transactions_v1");
